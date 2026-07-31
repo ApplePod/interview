@@ -14,14 +14,16 @@
     <div class="brand"><span class="brand-mark">N</span>뉴런소프트</div>
 
     <div id="bookingView">
-      <div class="hero-team" aria-hidden="true">
-        <div class="hero-avatar" style="--i:0"><img src="assets/team/dochi.png" alt="" /></div>
-        <div class="hero-avatar" style="--i:1"><img src="assets/team/malti.png" alt="" /></div>
-        <div class="hero-avatar hero-avatar--mid" style="--i:2"><img src="assets/team/soho.png" alt="" /></div>
-        <div class="hero-avatar" style="--i:3"><img src="assets/team/jay.png" alt="" /></div>
-        <div class="hero-avatar" style="--i:4"><img src="assets/team/noah.png" alt="" /></div>
+      <div class="firework-field" aria-hidden="true" id="miniFireworkField"></div>
+
+      <div class="hero-team" aria-hidden="true" id="heroTeam">
+        <div class="hero-avatar" style="--i:0" data-key="dochi"><img src="assets/team/dochi.png" alt="" /></div>
+        <div class="hero-avatar" style="--i:1" data-key="malti"><img src="assets/team/malti.png" alt="" /></div>
+        <div class="hero-avatar hero-avatar--mid" style="--i:2" data-key="soho"><img src="assets/team/soho.png" alt="" /></div>
+        <div class="hero-avatar" style="--i:3" data-key="jay"><img src="assets/team/jay.png" alt="" /></div>
+        <div class="hero-avatar" style="--i:4" data-key="noah"><img src="assets/team/noah.png" alt="" /></div>
       </div>
-      <p class="hero-caption">뉴런팀이 인터뷰에서 만나뵙기를 기다리고 있어요 👋</p>
+      <p class="hero-caption" id="heroCaption">잠시만요, 일정을 불러오고 있어요…</p>
 
       <h1 class="page-title">면접 일정을 선택해주세요</h1>
       <p class="page-desc">달력에서 초록 점이 있는 날짜를 고르면, 그 날 예약 가능한 시간이 나와요.</p>
@@ -100,6 +102,9 @@
         <div class="success-icon">✓</div>
         <div class="success-title">예약이 완료되었습니다</div>
         <div class="success-desc" id="successDesc"></div>
+        <div class="success-actions">
+          <button class="btn btn-ghost" id="icsBtn" type="button">📅 캘린더에 추가하기</button>
+        </div>
       </div>
     </div>
   </div>
@@ -110,12 +115,62 @@
     var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     var WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+    var TEAM = [
+      { key: 'dochi', name: '도치' },
+      { key: 'malti', name: '말티' },
+      { key: 'soho', name: '소호' },
+      { key: 'jay', name: '제이' },
+      { key: 'noah', name: '노아' }
+    ];
 
     var selectedSlotId = null;
     var slotsById = {};
     var slotsByDate = {};
     var calMonth = null;
     var selectedDate = null;
+    var typeTimer = null;
+    var lastBookedSlot = null;
+    var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    var guideIndex = parseInt(sessionStorage.getItem('nls_guide_idx'), 10);
+    if (isNaN(guideIndex) || guideIndex < 0 || guideIndex > 4) {
+      guideIndex = Math.floor(Math.random() * 5);
+      sessionStorage.setItem('nls_guide_idx', String(guideIndex));
+    }
+    var guideName = TEAM[guideIndex].name;
+    (function () {
+      var cell = document.querySelector('#heroTeam .hero-avatar[data-key="' + TEAM[guideIndex].key + '"]');
+      if (cell) cell.classList.add('is-guide');
+    })();
+
+    function typeText(text) {
+      var el = document.getElementById('heroCaption');
+      if (typeTimer) clearInterval(typeTimer);
+      if (prefersReduced) { el.textContent = text; return; }
+      el.textContent = '';
+      var i = 0;
+      typeTimer = setInterval(function () {
+        i++;
+        el.textContent = text.slice(0, i);
+        if (i >= text.length) clearInterval(typeTimer);
+      }, 16);
+    }
+
+    function updateGuideMessage(state) {
+      var msg;
+      if (state === 'loading-error') {
+        msg = '앗, 일정을 불러오지 못했어요. 새로고침 해볼까요? 🙏';
+      } else if (state === 'empty') {
+        msg = '지금은 예약 가능한 시간이 없어요. 조금만 기다려주세요 🙏';
+      } else if (!selectedDate) {
+        msg = guideName + '예요! 편한 날짜부터 골라주세요 👋';
+      } else if (!selectedSlotId) {
+        msg = '좋아요! 이제 편한 시간을 골라주세요 ⏰';
+      } else {
+        msg = '거의 다 왔어요! 이름과 이메일만 알려주시면 끝이에요 ✍️';
+      }
+      typeText(msg);
+    }
 
     function pad(n) { return n < 10 ? '0' + n : '' + n; }
     function toKey(y, m, d) { return y + '-' + pad(m + 1) + '-' + pad(d); }
@@ -168,12 +223,14 @@
         calendarEl.style.display = 'none';
         document.getElementById('steps').style.display = 'none';
         document.getElementById('slotsContainer').innerHTML = '<p class="empty-state">일정을 불러오지 못했어요. 새로고침 해주세요.</p>';
+        updateGuideMessage('loading-error');
         return;
       }
       if (!hasAnySlots) {
         calendarEl.style.display = 'none';
         document.getElementById('steps').style.display = 'none';
         document.getElementById('slotsContainer').innerHTML = '<p class="empty-state">지금은 예약 가능한 시간이 없어요. 담당자에게 문의해주세요.</p>';
+        updateGuideMessage('empty');
         return;
       }
 
@@ -194,6 +251,7 @@
       renderCalendar();
       renderDaySlots();
       updateSteps();
+      updateGuideMessage();
     }
 
     function renderCalendar() {
@@ -231,8 +289,32 @@
           renderCalendar();
           renderDaySlots();
           updateSteps();
+          updateGuideMessage();
         });
       });
+    }
+
+    function burstAtElement(el, sparkCount, spread) {
+      if (prefersReduced) return;
+      var field = document.getElementById('miniFireworkField');
+      if (!field || !el) return;
+      var rect = el.getBoundingClientRect();
+      var xPct = ((rect.left + rect.width / 2) / window.innerWidth) * 100;
+      var cyPx = rect.top + rect.height / 2;
+      for (var i = 0; i < sparkCount; i++) {
+        var angle = (i / sparkCount) * Math.PI * 2 + Math.random() * 0.4;
+        var dist = spread * 0.5 + Math.random() * spread;
+        var dx = Math.cos(angle) * dist;
+        var dy = Math.sin(angle) * dist;
+        var s = document.createElement('div');
+        s.className = 'firework-spark';
+        s.style.left = xPct + '%';
+        s.style.top = cyPx.toFixed(0) + 'px';
+        s.style.setProperty('--dx', dx.toFixed(0) + 'px');
+        s.style.setProperty('--dy', dy.toFixed(0) + 'px');
+        field.appendChild(s);
+        (function (node) { setTimeout(function () { node.remove(); }, 1500); })(s);
+      }
     }
 
     function renderDaySlots() {
@@ -258,9 +340,11 @@
           container.querySelectorAll('.slot-btn').forEach(function (b) { b.classList.remove('is-selected'); });
           btn.classList.add('is-selected');
           selectedSlotId = btn.getAttribute('data-id');
+          burstAtElement(btn, 16, 42);
           document.getElementById('formCard').style.display = 'block';
           document.getElementById('formCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
           updateSteps();
+          updateGuideMessage();
         });
       });
     }
@@ -379,11 +463,47 @@
       }
 
       var slot = slotsById[selectedSlotId];
+      lastBookedSlot = slot;
       document.getElementById('successDesc').textContent =
         fmtDate(slot.slot_date) + ' ' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '에 뵙겠습니다. 입력하신 이메일로 별도 안내드릴게요.';
       document.getElementById('bookingView').style.display = 'none';
       document.getElementById('successView').style.display = 'block';
       fireCelebration();
+    });
+
+    function buildIcs(slot) {
+      var d = slot.slot_date.replace(/-/g, '');
+      var startT = slot.start_time.slice(0, 5).replace(':', '') + '00';
+      var endT = slot.end_time.slice(0, 5).replace(':', '') + '00';
+      var lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//뉴런소프트//면접 일정//KO',
+        'BEGIN:VEVENT',
+        'UID:' + slot.id + '@newlearnsoft-interview',
+        'DTSTAMP:' + d + 'T' + startT,
+        'DTSTART:' + d + 'T' + startT,
+        'DTEND:' + d + 'T' + endT,
+        'SUMMARY:뉴런소프트 면접',
+        'DESCRIPTION:뉴런소프트와의 면접 일정입니다.',
+        'END:VEVENT',
+        'END:VCALENDAR'
+      ];
+      return lines.join('\r\n');
+    }
+
+    document.getElementById('icsBtn').addEventListener('click', function () {
+      if (!lastBookedSlot) return;
+      var ics = buildIcs(lastBookedSlot);
+      var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = '뉴런소프트_면접일정.ics';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     });
 
     loadSlots();
