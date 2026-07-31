@@ -14,8 +14,25 @@
     <div class="brand"><span class="brand-mark">N</span>뉴런소프트</div>
 
     <div id="bookingView">
+      <div class="hero-team" aria-hidden="true">
+        <div class="hero-avatar" style="--i:0"><img src="assets/team/dochi.png" alt="" /></div>
+        <div class="hero-avatar" style="--i:1"><img src="assets/team/malti.png" alt="" /></div>
+        <div class="hero-avatar hero-avatar--mid" style="--i:2"><img src="assets/team/soho.png" alt="" /></div>
+        <div class="hero-avatar" style="--i:3"><img src="assets/team/jay.png" alt="" /></div>
+        <div class="hero-avatar" style="--i:4"><img src="assets/team/noah.png" alt="" /></div>
+      </div>
+      <p class="hero-caption">뉴런팀이 인터뷰에서 만나뵙기를 기다리고 있어요 👋</p>
+
       <h1 class="page-title">면접 일정을 선택해주세요</h1>
       <p class="page-desc">달력에서 초록 점이 있는 날짜를 고르면, 그 날 예약 가능한 시간이 나와요.</p>
+
+      <div class="steps" id="steps">
+        <div class="step" id="step1"><div class="step-dot">1</div><div class="step-label">날짜</div></div>
+        <div class="step-line"></div>
+        <div class="step" id="step2"><div class="step-dot">2</div><div class="step-label">시간</div></div>
+        <div class="step-line"></div>
+        <div class="step" id="step3"><div class="step-dot">3</div><div class="step-label">정보</div></div>
+      </div>
 
       <div class="calendar" id="calendar" style="display:none;">
         <div class="cal-header">
@@ -54,6 +71,31 @@
     </div>
 
     <div id="successView" style="display:none;">
+      <div class="firework-field" aria-hidden="true" id="fireworkField"></div>
+
+      <div class="welcome-team" aria-hidden="true">
+        <div class="welcome-avatar" style="--i:0">
+          <img src="assets/team/dochi.png" alt="" />
+          <span class="welcome-avatar-name">도치</span>
+        </div>
+        <div class="welcome-avatar" style="--i:1">
+          <img src="assets/team/malti.png" alt="" />
+          <span class="welcome-avatar-name">말티</span>
+        </div>
+        <div class="welcome-avatar welcome-avatar--center" style="--i:2">
+          <img src="assets/team/soho.png" alt="" />
+          <span class="welcome-avatar-name">소호</span>
+        </div>
+        <div class="welcome-avatar" style="--i:3">
+          <img src="assets/team/jay.png" alt="" />
+          <span class="welcome-avatar-name">제이</span>
+        </div>
+        <div class="welcome-avatar" style="--i:4">
+          <img src="assets/team/noah.png" alt="" />
+          <span class="welcome-avatar-name">노아</span>
+        </div>
+      </div>
+
       <div class="success-box card">
         <div class="success-icon">✓</div>
         <div class="success-title">예약이 완료되었습니다</div>
@@ -84,6 +126,23 @@
       return (dt.getMonth() + 1) + '월 ' + dt.getDate() + '일 (' + WEEKDAYS[dt.getDay()] + ')';
     }
 
+    function updateSteps() {
+      var s1 = document.getElementById('step1');
+      var s2 = document.getElementById('step2');
+      var s3 = document.getElementById('step3');
+      [s1, s2, s3].forEach(function (s) { s.classList.remove('is-active', 'is-done'); });
+      if (!selectedDate) {
+        s1.classList.add('is-active');
+      } else if (!selectedSlotId) {
+        s1.classList.add('is-done');
+        s2.classList.add('is-active');
+      } else {
+        s1.classList.add('is-done');
+        s2.classList.add('is-done');
+        s3.classList.add('is-active');
+      }
+    }
+
     async function loadSlots() {
       var { data, error } = await sb
         .from('interview_slots')
@@ -107,16 +166,19 @@
 
       if (error) {
         calendarEl.style.display = 'none';
+        document.getElementById('steps').style.display = 'none';
         document.getElementById('slotsContainer').innerHTML = '<p class="empty-state">일정을 불러오지 못했어요. 새로고침 해주세요.</p>';
         return;
       }
       if (!hasAnySlots) {
         calendarEl.style.display = 'none';
+        document.getElementById('steps').style.display = 'none';
         document.getElementById('slotsContainer').innerHTML = '<p class="empty-state">지금은 예약 가능한 시간이 없어요. 담당자에게 문의해주세요.</p>';
         return;
       }
 
       calendarEl.style.display = 'block';
+      document.getElementById('steps').style.display = 'flex';
 
       if (!calMonth) {
         var firstDateKey = Object.keys(slotsByDate).sort()[0];
@@ -131,6 +193,7 @@
 
       renderCalendar();
       renderDaySlots();
+      updateSteps();
     }
 
     function renderCalendar() {
@@ -167,6 +230,7 @@
           document.getElementById('formCard').style.display = 'none';
           renderCalendar();
           renderDaySlots();
+          updateSteps();
         });
       });
     }
@@ -196,6 +260,7 @@
           selectedSlotId = btn.getAttribute('data-id');
           document.getElementById('formCard').style.display = 'block';
           document.getElementById('formCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          updateSteps();
         });
       });
     }
@@ -208,6 +273,54 @@
       calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
       renderCalendar();
     });
+
+    function fireCelebration() {
+      var field = document.getElementById('fireworkField');
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || !field) return;
+
+      function burst(xPct, yPct, delay, sparkCount, spread) {
+        var vh = window.innerHeight;
+        var cyPx = vh * (yPct / 100);
+        for (var i = 0; i < sparkCount; i++) {
+          var angle = (i / sparkCount) * Math.PI * 2 + Math.random() * 0.3;
+          var dist = spread * 0.6 + Math.random() * spread;
+          var dx = Math.cos(angle) * dist;
+          var dy = Math.sin(angle) * dist;
+          var el = document.createElement('div');
+          el.className = 'firework-spark';
+          el.style.left = xPct + '%';
+          el.style.top = cyPx.toFixed(0) + 'px';
+          el.style.setProperty('--dx', dx.toFixed(0) + 'px');
+          el.style.setProperty('--dy', dy.toFixed(0) + 'px');
+          el.style.animationDelay = delay + 's';
+          field.appendChild(el);
+        }
+      }
+
+      var bursts = [
+        [12, 18], [50, 12], [85, 20],
+        [25, 38], [72, 35], [50, 45],
+        [10, 60], [90, 58], [35, 68], [65, 65]
+      ];
+      bursts.forEach(function (pos, idx) {
+        var delay = idx * 0.07 + Math.random() * 0.06;
+        var sparkCount = 28 + Math.floor(Math.random() * 14);
+        var spread = 65 + Math.random() * 70;
+        burst(pos[0], pos[1], delay, sparkCount, spread);
+      });
+
+      setTimeout(function () {
+        bursts.forEach(function (pos, idx) {
+          var delay = idx * 0.07;
+          burst(
+            Math.min(96, Math.max(4, pos[0] + (Math.random() * 16 - 8))),
+            Math.min(78, Math.max(8, pos[1] + (Math.random() * 12 - 6))),
+            delay, 26 + Math.floor(Math.random() * 12), 60 + Math.random() * 70
+          );
+        });
+      }, 1800);
+    }
 
     document.getElementById('confirmBtn').addEventListener('click', async function () {
       var statusEl = document.getElementById('statusMsg');
@@ -270,6 +383,7 @@
         fmtDate(slot.slot_date) + ' ' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '에 뵙겠습니다. 입력하신 이메일로 별도 안내드릴게요.';
       document.getElementById('bookingView').style.display = 'none';
       document.getElementById('successView').style.display = 'block';
+      fireCelebration();
     });
 
     loadSlots();

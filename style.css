@@ -105,7 +105,24 @@ a { color: inherit; text-decoration: none; }
 .success-desc { font-size: 13.5px; color: var(--gray-400); line-height: 1.7; }
 
 /* --- admin --- */
-.login-box { max-width: 360px; margin: 100px auto; }
+.login-avatar {
+  width: 56px;
+  height: 56px;
+  margin: 90px auto 14px;
+  opacity: 0;
+  transform: translateY(10px) scale(0.6);
+  animation: heroAvatarIn 0.6s cubic-bezier(.34, 1.56, .64, 1) 0.1s forwards;
+}
+.login-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--gray-800);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.16), 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+.login-greet { text-align: center; font-size: 13px; color: var(--gray-400); margin-bottom: 24px; }
+.login-box { max-width: 360px; margin: 0 auto; }
 .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
 .admin-header .btn-ghost { width: auto; padding: 8px 16px; font-size: 12.5px; }
 .slot-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
@@ -143,3 +160,141 @@ a { color: inherit; text-decoration: none; }
 .cal-day.has-slots::after { content: ''; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: #57d18d; }
 .cal-day.is-selected.has-slots::after { background: var(--black); }
 .cal-empty-hint { font-size: 12.5px; color: var(--gray-500); text-align: center; padding: 10px 2px 0; }
+
+/* --- hero team strip --- */
+.hero-team {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.hero-avatar {
+  width: 38px;
+  height: 38px;
+  opacity: 0;
+  transform: translateY(10px) scale(0.6);
+  animation: heroAvatarIn 0.55s cubic-bezier(.34, 1.56, .64, 1) forwards, heroAvatarBob 3.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.09s), calc(0.8s + var(--i) * 0.2s);
+}
+.hero-avatar--mid { width: 44px; height: 44px; }
+.hero-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--gray-800);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.16), 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+@keyframes heroAvatarIn {
+  0% { opacity: 0; transform: translateY(10px) scale(0.6); }
+  60% { opacity: 1; transform: translateY(-3px) scale(1.06); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes heroAvatarBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.hero-caption { text-align: center; font-size: 12.5px; color: var(--gray-500); margin-bottom: 34px; }
+
+/* --- step indicator --- */
+.steps { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 28px; }
+.step { display: flex; align-items: center; gap: 6px; }
+.step-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--gray-500);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--t), border-color var(--t), color var(--t);
+}
+.step-label { font-size: 11.5px; color: var(--gray-500); font-weight: 600; transition: color var(--t); }
+.step-line { width: 20px; height: 1px; background: var(--glass-border); }
+.step.is-active .step-dot { background: var(--white); color: var(--black); border-color: var(--white); }
+.step.is-active .step-label { color: var(--white); }
+.step.is-done .step-dot { background: rgba(87, 209, 141, 0.15); color: #57d18d; border-color: rgba(87, 209, 141, 0.3); }
+.step.is-done .step-label { color: var(--gray-300); }
+@media (max-width: 420px) { .step-label { display: none; } }
+
+/* --- reveal transitions --- */
+#slotsContainer, #formCard { animation: revealUp 0.35s ease both; }
+@keyframes revealUp { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: translateY(0); } }
+.cal-day:active:not(.is-disabled):not(.is-outside) { transform: scale(0.88); }
+
+/* --- celebration success view --- */
+.firework-field { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.firework-spark {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 1), 0 0 20px rgba(255, 255, 255, 0.65);
+  opacity: 0;
+  animation: sparkBurst 1.4s cubic-bezier(.1, .6, .3, 1) forwards;
+}
+@keyframes sparkBurst {
+  0% { transform: translate(0, 0) scale(1.3); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+}
+.welcome-team {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 14px;
+  margin: 4px auto 34px;
+}
+.welcome-avatar {
+  position: relative;
+  z-index: 1;
+  width: 56px;
+  height: 56px;
+  opacity: 0;
+  transform: rotateY(100deg) translateY(18px) scale(0.4);
+  animation:
+    avatarComeAlive 0.7s cubic-bezier(.34, 1.56, .64, 1) forwards,
+    avatarBob 3.2s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.16s), calc(1s + var(--i) * 0.22s);
+}
+.welcome-avatar--center { width: 64px; height: 64px; }
+.welcome-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--gray-800);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.22), 0 10px 22px rgba(0, 0, 0, 0.55);
+}
+.welcome-avatar-name {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--gray-500);
+  white-space: nowrap;
+}
+@keyframes avatarComeAlive {
+  0% { opacity: 0; transform: rotateY(100deg) translateY(18px) scale(0.4); }
+  55% { opacity: 1; transform: rotateY(-14deg) translateY(-6px) scale(1.08); }
+  100% { opacity: 1; transform: rotateY(0deg) translateY(0) scale(1); }
+}
+@keyframes avatarBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.success-box { position: relative; z-index: 2; }
+@media (prefers-reduced-motion: reduce) {
+  .firework-field { display: none; }
+  .welcome-avatar, .hero-avatar { animation: none; opacity: 1; transform: none; }
+}
