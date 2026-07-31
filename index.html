@@ -15,7 +15,19 @@
 
     <div id="bookingView">
       <h1 class="page-title">면접 일정을 선택해주세요</h1>
-      <p class="page-desc">가능한 시간 중 하나를 골라주시면, 담당자 확인 후 예약이 확정됩니다.</p>
+      <p class="page-desc">달력에서 초록 점이 있는 날짜를 고르면, 그 날 예약 가능한 시간이 나와요.</p>
+
+      <div class="calendar" id="calendar" style="display:none;">
+        <div class="cal-header">
+          <button class="cal-nav-btn" id="calPrev" type="button" aria-label="이전 달">‹</button>
+          <div class="cal-title" id="calTitle"></div>
+          <button class="cal-nav-btn" id="calNext" type="button" aria-label="다음 달">›</button>
+        </div>
+        <div class="cal-weekdays">
+          <div class="cal-weekday">일</div><div class="cal-weekday">월</div><div class="cal-weekday">화</div><div class="cal-weekday">수</div><div class="cal-weekday">목</div><div class="cal-weekday">금</div><div class="cal-weekday">토</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
 
       <div id="slotsContainer"></div>
 
@@ -55,21 +67,24 @@
     var SUPABASE_ANON_KEY = 'sb_publishable_4X1V0pGecymEpwcSduQjTw_ZCkZTrhK';
     var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    var WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
     var selectedSlotId = null;
     var slotsById = {};
+    var slotsByDate = {};
+    var calMonth = null;
+    var selectedDate = null;
 
-    function fmtTime(t) {
-      return t.slice(0, 5);
-    }
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    function toKey(y, m, d) { return y + '-' + pad(m + 1) + '-' + pad(d); }
+    function todayKey() { var t = new Date(); return toKey(t.getFullYear(), t.getMonth(), t.getDate()); }
+    function fmtTime(t) { return t.slice(0, 5); }
     function fmtDate(d) {
       var dt = new Date(d + 'T00:00:00');
-      var days = ['일', '월', '화', '수', '목', '금', '토'];
-      return (dt.getMonth() + 1) + '월 ' + dt.getDate() + '일 (' + days[dt.getDay()] + ')';
+      return (dt.getMonth() + 1) + '월 ' + dt.getDate() + '일 (' + WEEKDAYS[dt.getDay()] + ')';
     }
 
     async function loadSlots() {
-      var container = document.getElementById('slotsContainer');
-      container.innerHTML = '<p class="empty-state">불러오는 중…</p>';
       var { data, error } = await sb
         .from('interview_slots')
         .select('*')
@@ -77,32 +92,101 @@
         .order('slot_date', { ascending: true })
         .order('start_time', { ascending: true });
 
+      slotsById = {};
+      slotsByDate = {};
+      if (!error && data) {
+        data.forEach(function (slot) {
+          slotsById[slot.id] = slot;
+          if (!slotsByDate[slot.slot_date]) slotsByDate[slot.slot_date] = [];
+          slotsByDate[slot.slot_date].push(slot);
+        });
+      }
+
+      var hasAnySlots = Object.keys(slotsByDate).length > 0;
+      var calendarEl = document.getElementById('calendar');
+
       if (error) {
-        container.innerHTML = '<p class="empty-state">일정을 불러오지 못했어요. 새로고침 해주세요.</p>';
+        calendarEl.style.display = 'none';
+        document.getElementById('slotsContainer').innerHTML = '<p class="empty-state">일정을 불러오지 못했어요. 새로고침 해주세요.</p>';
         return;
       }
-      if (!data || data.length === 0) {
-        container.innerHTML = '<p class="empty-state">지금은 예약 가능한 시간이 없어요. 담당자에게 문의해주세요.</p>';
+      if (!hasAnySlots) {
+        calendarEl.style.display = 'none';
+        document.getElementById('slotsContainer').innerHTML = '<p class="empty-state">지금은 예약 가능한 시간이 없어요. 담당자에게 문의해주세요.</p>';
         return;
       }
 
-      var byDate = {};
-      data.forEach(function (slot) {
-        slotsById[slot.id] = slot;
-        if (!byDate[slot.slot_date]) byDate[slot.slot_date] = [];
-        byDate[slot.slot_date].push(slot);
-      });
+      calendarEl.style.display = 'block';
+
+      if (!calMonth) {
+        var firstDateKey = Object.keys(slotsByDate).sort()[0];
+        var fd = new Date(firstDateKey + 'T00:00:00');
+        calMonth = new Date(fd.getFullYear(), fd.getMonth(), 1);
+      }
+      if (selectedDate && !slotsByDate[selectedDate]) {
+        selectedDate = null;
+        selectedSlotId = null;
+        document.getElementById('formCard').style.display = 'none';
+      }
+
+      renderCalendar();
+      renderDaySlots();
+    }
+
+    function renderCalendar() {
+      var y = calMonth.getFullYear();
+      var m = calMonth.getMonth();
+      document.getElementById('calTitle').textContent = y + '년 ' + (m + 1) + '월';
+
+      var firstDay = new Date(y, m, 1);
+      var startOffset = firstDay.getDay();
+      var daysInMonth = new Date(y, m + 1, 0).getDate();
+      var today = todayKey();
 
       var html = '';
-      Object.keys(byDate).sort().forEach(function (date) {
-        html += '<div class="slot-date-group">';
-        html += '<div class="slot-date-label">' + fmtDate(date) + '</div>';
-        html += '<div class="slot-list">';
-        byDate[date].forEach(function (slot) {
-          html += '<button type="button" class="slot-btn" data-id="' + slot.id + '">' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '</button>';
+      for (var i = 0; i < startOffset; i++) {
+        html += '<div class="cal-day is-outside"></div>';
+      }
+      for (var d = 1; d <= daysInMonth; d++) {
+        var key = toKey(y, m, d);
+        var hasSlots = !!slotsByDate[key];
+        var isPast = key < today;
+        var classes = ['cal-day'];
+        if (hasSlots) classes.push('has-slots');
+        if (key === today) classes.push('is-today');
+        if (key === selectedDate) classes.push('is-selected');
+        if (!hasSlots || isPast) classes.push('is-disabled');
+        html += '<div class="' + classes.join(' ') + '" data-date="' + key + '">' + d + '</div>';
+      }
+      document.getElementById('calGrid').innerHTML = html;
+
+      document.querySelectorAll('#calGrid .cal-day.has-slots:not(.is-disabled)').forEach(function (cell) {
+        cell.addEventListener('click', function () {
+          selectedDate = cell.getAttribute('data-date');
+          selectedSlotId = null;
+          document.getElementById('formCard').style.display = 'none';
+          renderCalendar();
+          renderDaySlots();
         });
-        html += '</div></div>';
       });
+    }
+
+    function renderDaySlots() {
+      var container = document.getElementById('slotsContainer');
+      if (!selectedDate) {
+        container.innerHTML = '<p class="cal-empty-hint">🟢 초록 점이 있는 날짜를 선택해주세요.</p>';
+        return;
+      }
+      var slots = slotsByDate[selectedDate] || [];
+      if (slots.length === 0) {
+        container.innerHTML = '<p class="empty-state">이 날짜엔 예약 가능한 시간이 없어요.</p>';
+        return;
+      }
+      var html = '<div class="slot-date-label">' + fmtDate(selectedDate) + '</div><div class="slot-list">';
+      slots.forEach(function (slot) {
+        html += '<button type="button" class="slot-btn' + (slot.id === selectedSlotId ? ' is-selected' : '') + '" data-id="' + slot.id + '">' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '</button>';
+      });
+      html += '</div>';
       container.innerHTML = html;
 
       container.querySelectorAll('.slot-btn').forEach(function (btn) {
@@ -115,6 +199,15 @@
         });
       });
     }
+
+    document.getElementById('calPrev').addEventListener('click', function () {
+      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
+      renderCalendar();
+    });
+    document.getElementById('calNext').addEventListener('click', function () {
+      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
+      renderCalendar();
+    });
 
     document.getElementById('confirmBtn').addEventListener('click', async function () {
       var statusEl = document.getElementById('statusMsg');
