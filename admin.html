@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>면접 일정 관리 | 뉴런소프트</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+  <div class="wrap">
+    <div class="brand"><span class="brand-mark">N</span>뉴런소프트</div>
+
+    <div id="loginView">
+      <div class="card login-box">
+        <div class="field">
+          <label for="a-email">이메일</label>
+          <input type="email" id="a-email" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="a-password">비밀번호</label>
+          <input type="password" id="a-password" autocomplete="current-password" />
+        </div>
+        <button class="btn btn-primary" id="loginBtn">로그인</button>
+        <div class="status-msg" id="loginStatus"></div>
+      </div>
+    </div>
+
+    <div id="adminView" style="display:none;">
+      <div class="admin-header">
+        <h1 class="page-title" style="margin-bottom:0;">면접 일정 관리</h1>
+        <button class="btn btn-ghost" id="logoutBtn">로그아웃</button>
+      </div>
+
+      <div class="card">
+        <div class="field" style="margin-bottom:16px;"><label>새 슬롯 추가</label></div>
+        <div class="add-slot-form">
+          <div class="field">
+            <label for="n-date">날짜</label>
+            <input type="date" id="n-date" />
+          </div>
+          <div class="field">
+            <label for="n-start">시작 시간</label>
+            <input type="time" id="n-start" />
+          </div>
+          <div class="field">
+            <label for="n-end">종료 시간</label>
+            <input type="time" id="n-end" />
+          </div>
+          <button class="btn btn-primary" id="addSlotBtn">슬롯 추가</button>
+        </div>
+        <div class="status-msg" id="addStatus"></div>
+      </div>
+
+      <table class="slot-table">
+        <thead>
+          <tr><th>날짜</th><th>시간</th><th>상태</th><th>지원자</th><th>연락처</th><th>포지션</th><th></th></tr>
+        </thead>
+        <tbody id="slotTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    var SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
+    var SUPABASE_ANON_KEY = 'sb_publishable_4X1V0pGecymEpwcSduQjTw_ZCkZTrhK';
+    var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function showAdmin() {
+      document.getElementById('loginView').style.display = 'none';
+      document.getElementById('adminView').style.display = 'block';
+      loadAllSlots();
+    }
+    function showLogin() {
+      document.getElementById('loginView').style.display = 'block';
+      document.getElementById('adminView').style.display = 'none';
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', async function () {
+      var statusEl = document.getElementById('loginStatus');
+      statusEl.textContent = '';
+      statusEl.className = 'status-msg';
+      var email = document.getElementById('a-email').value.trim();
+      var password = document.getElementById('a-password').value;
+      var { error } = await sb.auth.signInWithPassword({ email: email, password: password });
+      if (error) {
+        statusEl.textContent = '로그인 실패: 이메일 또는 비밀번호를 확인해주세요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+      showAdmin();
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async function () {
+      await sb.auth.signOut();
+      showLogin();
+    });
+
+    function fmtTime(t) { return t ? t.slice(0, 5) : ''; }
+    function fmtDate(d) {
+      var dt = new Date(d + 'T00:00:00');
+      var days = ['일', '월', '화', '수', '목', '금', '토'];
+      return (dt.getMonth() + 1) + '/' + dt.getDate() + ' (' + days[dt.getDay()] + ')';
+    }
+
+    async function loadAllSlots() {
+      var tbody = document.getElementById('slotTableBody');
+      tbody.innerHTML = '<tr><td colspan="7">불러오는 중…</td></tr>';
+      var { data, error } = await sb
+        .from('interview_slots')
+        .select('*')
+        .order('slot_date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      if (error) {
+        tbody.innerHTML = '<tr><td colspan="7">불러오기 실패</td></tr>';
+        return;
+      }
+      if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7">등록된 슬롯이 없어요.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.map(function (slot) {
+        var badge = slot.is_booked
+          ? '<span class="badge badge-booked">예약됨</span>'
+          : '<span class="badge badge-open">비어있음</span>';
+        return '<tr data-id="' + slot.id + '">' +
+          '<td>' + fmtDate(slot.slot_date) + '</td>' +
+          '<td>' + fmtTime(slot.start_time) + '–' + fmtTime(slot.end_time) + '</td>' +
+          '<td>' + badge + '</td>' +
+          '<td>' + (slot.candidate_name || '-') + '</td>' +
+          '<td>' + (slot.candidate_email || slot.candidate_phone || '-') + '</td>' +
+          '<td>' + (slot.position || '-') + '</td>' +
+          '<td class="row-actions"><button class="icon-btn" data-action="delete" title="삭제">삭제</button></td>' +
+          '</tr>';
+      }).join('');
+
+      tbody.querySelectorAll('[data-action="delete"]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var tr = btn.closest('tr');
+          var id = tr.getAttribute('data-id');
+          if (!confirm('이 슬롯을 삭제할까요?')) return;
+          await sb.from('interview_slots').delete().eq('id', id);
+          loadAllSlots();
+        });
+      });
+    }
+
+    document.getElementById('addSlotBtn').addEventListener('click', async function () {
+      var statusEl = document.getElementById('addStatus');
+      statusEl.textContent = '';
+      statusEl.className = 'status-msg';
+      var date = document.getElementById('n-date').value;
+      var start = document.getElementById('n-start').value;
+      var end = document.getElementById('n-end').value;
+      if (!date || !start || !end) {
+        statusEl.textContent = '날짜/시작/종료 시간을 모두 입력해주세요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+      var { error } = await sb.from('interview_slots').insert({ slot_date: date, start_time: start, end_time: end });
+      if (error) {
+        statusEl.textContent = '추가 실패: ' + error.message;
+        statusEl.classList.add('is-error');
+        return;
+      }
+      statusEl.textContent = '추가되었습니다.';
+      statusEl.classList.add('is-success');
+      document.getElementById('n-date').value = '';
+      document.getElementById('n-start').value = '';
+      document.getElementById('n-end').value = '';
+      loadAllSlots();
+    });
+
+    (async function init() {
+      var { data } = await sb.auth.getSession();
+      if (data && data.session) {
+        showAdmin();
+      }
+    })();
+  </script>
+
+</body>
+</html>

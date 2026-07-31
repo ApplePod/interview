@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>면접 일정 예약 | 뉴런소프트</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+  <div class="wrap">
+    <div class="brand"><span class="brand-mark">N</span>뉴런소프트</div>
+
+    <div id="bookingView">
+      <h1 class="page-title">면접 일정을 선택해주세요</h1>
+      <p class="page-desc">가능한 시간 중 하나를 골라주시면, 담당자 확인 후 예약이 확정됩니다.</p>
+
+      <div id="slotsContainer"></div>
+
+      <div class="card" id="formCard" style="display:none;">
+        <div class="field">
+          <label for="c-name">이름 *</label>
+          <input type="text" id="c-name" required />
+        </div>
+        <div class="field">
+          <label for="c-email">이메일 *</label>
+          <input type="email" id="c-email" required />
+        </div>
+        <div class="field">
+          <label for="c-phone">연락처</label>
+          <input type="tel" id="c-phone" />
+        </div>
+        <div class="field">
+          <label for="c-position">지원 포지션</label>
+          <input type="text" id="c-position" placeholder="예: PO, 개발자" />
+        </div>
+        <button class="btn btn-primary" id="confirmBtn">이 시간으로 예약하기</button>
+        <div class="status-msg" id="statusMsg"></div>
+      </div>
+    </div>
+
+    <div id="successView" style="display:none;">
+      <div class="success-box card">
+        <div class="success-icon">✓</div>
+        <div class="success-title">예약이 완료되었습니다</div>
+        <div class="success-desc" id="successDesc"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
+    var SUPABASE_ANON_KEY = 'sb_publishable_4X1V0pGecymEpwcSduQjTw_ZCkZTrhK';
+    var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    var selectedSlotId = null;
+    var slotsById = {};
+
+    function fmtTime(t) {
+      return t.slice(0, 5);
+    }
+    function fmtDate(d) {
+      var dt = new Date(d + 'T00:00:00');
+      var days = ['일', '월', '화', '수', '목', '금', '토'];
+      return (dt.getMonth() + 1) + '월 ' + dt.getDate() + '일 (' + days[dt.getDay()] + ')';
+    }
+
+    async function loadSlots() {
+      var container = document.getElementById('slotsContainer');
+      container.innerHTML = '<p class="empty-state">불러오는 중…</p>';
+      var { data, error } = await sb
+        .from('interview_slots')
+        .select('*')
+        .eq('is_booked', false)
+        .order('slot_date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      if (error) {
+        container.innerHTML = '<p class="empty-state">일정을 불러오지 못했어요. 새로고침 해주세요.</p>';
+        return;
+      }
+      if (!data || data.length === 0) {
+        container.innerHTML = '<p class="empty-state">지금은 예약 가능한 시간이 없어요. 담당자에게 문의해주세요.</p>';
+        return;
+      }
+
+      var byDate = {};
+      data.forEach(function (slot) {
+        slotsById[slot.id] = slot;
+        if (!byDate[slot.slot_date]) byDate[slot.slot_date] = [];
+        byDate[slot.slot_date].push(slot);
+      });
+
+      var html = '';
+      Object.keys(byDate).sort().forEach(function (date) {
+        html += '<div class="slot-date-group">';
+        html += '<div class="slot-date-label">' + fmtDate(date) + '</div>';
+        html += '<div class="slot-list">';
+        byDate[date].forEach(function (slot) {
+          html += '<button type="button" class="slot-btn" data-id="' + slot.id + '">' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '</button>';
+        });
+        html += '</div></div>';
+      });
+      container.innerHTML = html;
+
+      container.querySelectorAll('.slot-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          container.querySelectorAll('.slot-btn').forEach(function (b) { b.classList.remove('is-selected'); });
+          btn.classList.add('is-selected');
+          selectedSlotId = btn.getAttribute('data-id');
+          document.getElementById('formCard').style.display = 'block';
+          document.getElementById('formCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      });
+    }
+
+    document.getElementById('confirmBtn').addEventListener('click', async function () {
+      var statusEl = document.getElementById('statusMsg');
+      statusEl.textContent = '';
+      statusEl.className = 'status-msg';
+
+      if (!selectedSlotId) {
+        statusEl.textContent = '먼저 시간을 선택해주세요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+      var name = document.getElementById('c-name').value.trim();
+      var email = document.getElementById('c-email').value.trim();
+      var phone = document.getElementById('c-phone').value.trim();
+      var position = document.getElementById('c-position').value.trim();
+
+      if (!name || !email) {
+        statusEl.textContent = '이름과 이메일은 필수예요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+
+      var btn = document.getElementById('confirmBtn');
+      btn.disabled = true;
+      btn.textContent = '예약 중…';
+
+      var { data, error } = await sb
+        .from('interview_slots')
+        .update({
+          is_booked: true,
+          candidate_name: name,
+          candidate_email: email,
+          candidate_phone: phone || null,
+          position: position || null,
+          booked_at: new Date().toISOString()
+        })
+        .eq('id', selectedSlotId)
+        .eq('is_booked', false)
+        .select();
+
+      btn.disabled = false;
+      btn.textContent = '이 시간으로 예약하기';
+
+      if (error) {
+        statusEl.textContent = '오류가 발생했어요. 다시 시도해주세요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+      if (!data || data.length === 0) {
+        statusEl.textContent = '아쉽게도 방금 다른 분이 먼저 예약했어요. 다른 시간을 선택해주세요.';
+        statusEl.classList.add('is-error');
+        selectedSlotId = null;
+        document.getElementById('formCard').style.display = 'none';
+        loadSlots();
+        return;
+      }
+
+      var slot = slotsById[selectedSlotId];
+      document.getElementById('successDesc').textContent =
+        fmtDate(slot.slot_date) + ' ' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '에 뵙겠습니다. 입력하신 이메일로 별도 안내드릴게요.';
+      document.getElementById('bookingView').style.display = 'none';
+      document.getElementById('successView').style.display = 'block';
+    });
+
+    loadSlots();
+  </script>
+
+</body>
+</html>
