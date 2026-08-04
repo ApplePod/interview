@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/sync-schedule",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "functions": {
+    "api/book-slot.js": {
+      "maxDuration": 60
+    }
+  }
+}

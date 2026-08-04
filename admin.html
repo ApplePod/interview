@@ -30,14 +30,29 @@
       </div>
     </div>
 
+    <div id="whoView" style="display:none;">
+      <div class="login-avatar" aria-hidden="true"><img src="assets/team/dochi.png" alt="" /></div>
+      <p class="login-greet">로그인됐어요! 오늘은 누구로 접속하시나요?</p>
+      <div class="hero-team" id="whoTeam" role="group" aria-label="담당자 선택">
+        <div class="hero-avatar" style="--i:0" data-key="dochi" role="button" tabindex="0"><img src="assets/team/dochi.png" alt="도치" /><span class="hero-avatar-name">도치</span></div>
+        <div class="hero-avatar" style="--i:1" data-key="malti" role="button" tabindex="0"><img src="assets/team/malti.png" alt="말티" /><span class="hero-avatar-name">말티</span></div>
+        <div class="hero-avatar hero-avatar--mid" style="--i:2" data-key="soho" role="button" tabindex="0"><img src="assets/team/soho.png" alt="소호" /><span class="hero-avatar-name">소호</span></div>
+        <div class="hero-avatar" style="--i:3" data-key="jay" role="button" tabindex="0"><img src="assets/team/jay.png" alt="제이" /><span class="hero-avatar-name">제이</span></div>
+        <div class="hero-avatar" style="--i:4" data-key="noah" role="button" tabindex="0"><img src="assets/team/noah.png" alt="노아" /><span class="hero-avatar-name">노아</span></div>
+      </div>
+    </div>
+
     <div id="adminView" style="display:none;">
       <div class="admin-header">
-        <h1 class="page-title" style="margin-bottom:0;">면접 일정 관리</h1>
-        <button class="btn btn-ghost" id="logoutBtn">로그아웃</button>
+        <h1 class="page-title" style="margin-bottom:0;">면접 일정 관리 · <span id="whoAmI"></span></h1>
+        <div>
+          <button class="btn btn-ghost" id="switchWhoBtn">담당자 변경</button>
+          <button class="btn btn-ghost" id="logoutBtn">로그아웃</button>
+        </div>
       </div>
 
       <div class="card">
-        <div class="field" style="margin-bottom:16px;"><label>새 슬롯 추가 — 날짜를 클릭해주세요</label></div>
+        <div class="field" style="margin-bottom:16px;"><label>새 슬롯 추가 — 날짜를 클릭해주세요 (담당자: <span id="whoAmI2"></span>)</label></div>
 
         <div class="calendar" id="adminCalendar" style="margin-bottom:16px;">
           <div class="cal-header">
@@ -70,9 +85,21 @@
         <div class="status-msg" id="addStatus"></div>
       </div>
 
+      <div class="field" style="margin:20px 0 8px;">
+        <label for="filterWho">담당자 필터</label>
+        <select id="filterWho">
+          <option value="all">전체 보기</option>
+          <option value="noah">노아</option>
+          <option value="dochi">도치</option>
+          <option value="malti">말티</option>
+          <option value="soho">소호</option>
+          <option value="jay">제이</option>
+        </select>
+      </div>
+
       <table class="slot-table">
         <thead>
-          <tr><th>날짜</th><th>시간</th><th>상태</th><th>지원자</th><th>연락처</th><th>포지션</th><th></th></tr>
+          <tr><th>날짜</th><th>시간</th><th>담당자</th><th>상태</th><th>지원자</th><th>연락처</th><th>포지션</th><th>희망연봉</th><th>이력서</th><th>포트폴리오</th><th></th></tr>
         </thead>
         <tbody id="slotTableBody"></tbody>
       </table>
@@ -85,19 +112,64 @@
     var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     var WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+    var TEAM = [
+      { key: 'noah', name: '노아' },
+      { key: 'dochi', name: '도치' },
+      { key: 'malti', name: '말티' },
+      { key: 'soho', name: '소호' },
+      { key: 'jay', name: '제이' }
+    ];
+    function nameOf(key) {
+      var t = TEAM.find(function (t) { return t.key === key; });
+      return t ? t.name : (key || '-');
+    }
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function escapeAttr(s) { return esc(s); }
+
+    var allSlots = [];
     var allSlotsByDate = {};
     var calMonth = null;
     var selectedAdminDate = null;
+    var currentInterviewer = null;
 
     function showAdmin() {
       document.getElementById('loginView').style.display = 'none';
+      document.getElementById('whoView').style.display = 'none';
       document.getElementById('adminView').style.display = 'block';
+      document.getElementById('whoAmI').textContent = nameOf(currentInterviewer);
+      document.getElementById('whoAmI2').textContent = nameOf(currentInterviewer);
+      document.getElementById('filterWho').value = currentInterviewer;
       loadAllSlots();
+    }
+    function showWho() {
+      document.getElementById('loginView').style.display = 'none';
+      document.getElementById('adminView').style.display = 'none';
+      document.getElementById('whoView').style.display = 'block';
     }
     function showLogin() {
       document.getElementById('loginView').style.display = 'block';
+      document.getElementById('whoView').style.display = 'none';
       document.getElementById('adminView').style.display = 'none';
     }
+
+    function chooseWho(key) {
+      currentInterviewer = key;
+      sessionStorage.setItem('nls_admin_who', key);
+      showAdmin();
+    }
+
+    document.querySelectorAll('#whoTeam .hero-avatar').forEach(function (el) {
+      el.addEventListener('click', function () { chooseWho(el.getAttribute('data-key')); });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseWho(el.getAttribute('data-key')); }
+      });
+    });
+
+    document.getElementById('switchWhoBtn').addEventListener('click', showWho);
 
     document.getElementById('loginBtn').addEventListener('click', async function () {
       var statusEl = document.getElementById('loginStatus');
@@ -111,11 +183,13 @@
         statusEl.classList.add('is-error');
         return;
       }
-      showAdmin();
+      showWho();
     });
 
     document.getElementById('logoutBtn').addEventListener('click', async function () {
       await sb.auth.signOut();
+      currentInterviewer = null;
+      sessionStorage.removeItem('nls_admin_who');
       showLogin();
     });
 
@@ -134,47 +208,60 @@
 
     async function loadAllSlots() {
       var tbody = document.getElementById('slotTableBody');
-      tbody.innerHTML = '<tr><td colspan="7">불러오는 중…</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11">불러오는 중…</td></tr>';
       var { data, error } = await sb
         .from('interview_slots')
         .select('*')
         .order('slot_date', { ascending: true })
         .order('start_time', { ascending: true });
 
-      allSlotsByDate = {};
-      if (!error && data) {
-        data.forEach(function (slot) {
-          if (!allSlotsByDate[slot.slot_date]) allSlotsByDate[slot.slot_date] = [];
-          allSlotsByDate[slot.slot_date].push(slot);
-        });
+      if (error) {
+        tbody.innerHTML = '<tr><td colspan="11">불러오기 실패</td></tr>';
+        return;
       }
+      allSlots = data || [];
 
       if (!calMonth) {
         var base = new Date();
         calMonth = new Date(base.getFullYear(), base.getMonth(), 1);
       }
+      renderFiltered();
+    }
+
+    function renderFiltered() {
+      var filter = document.getElementById('filterWho').value;
+      var filtered = filter === 'all' ? allSlots : allSlots.filter(function (s) { return s.interviewer === filter; });
+
+      allSlotsByDate = {};
+      filtered.forEach(function (slot) {
+        if (!allSlotsByDate[slot.slot_date]) allSlotsByDate[slot.slot_date] = [];
+        allSlotsByDate[slot.slot_date].push(slot);
+      });
       renderAdminCalendar();
 
-      if (error) {
-        tbody.innerHTML = '<tr><td colspan="7">불러오기 실패</td></tr>';
-        return;
-      }
-      if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7">등록된 슬롯이 없어요.</td></tr>';
+      var tbody = document.getElementById('slotTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11">등록된 슬롯이 없어요.</td></tr>';
         return;
       }
 
-      tbody.innerHTML = data.map(function (slot) {
+      tbody.innerHTML = filtered.map(function (slot) {
         var badge = slot.is_booked
           ? '<span class="badge badge-booked">예약됨</span>'
           : '<span class="badge badge-open">비어있음</span>';
+        var resumeLink = slot.resume_url ? '<a href="' + escapeAttr(slot.resume_url) + '" target="_blank" rel="noopener">보기</a>' : '-';
+        var portfolioLink = slot.portfolio_url ? '<a href="' + escapeAttr(slot.portfolio_url) + '" target="_blank" rel="noopener">보기</a>' : '-';
         return '<tr data-id="' + slot.id + '">' +
           '<td>' + fmtDate(slot.slot_date) + '</td>' +
           '<td>' + fmtTime(slot.start_time) + '–' + fmtTime(slot.end_time) + '</td>' +
+          '<td>' + nameOf(slot.interviewer) + '</td>' +
           '<td>' + badge + '</td>' +
-          '<td>' + (slot.candidate_name || '-') + '</td>' +
-          '<td>' + (slot.candidate_email || slot.candidate_phone || '-') + '</td>' +
-          '<td>' + (slot.position || '-') + '</td>' +
+          '<td>' + esc(slot.candidate_name || '-') + '</td>' +
+          '<td>' + esc(slot.candidate_email || slot.candidate_phone || '-') + '</td>' +
+          '<td>' + esc(slot.position || '-') + '</td>' +
+          '<td>' + esc(slot.desired_salary || '-') + '</td>' +
+          '<td>' + resumeLink + '</td>' +
+          '<td>' + portfolioLink + '</td>' +
           '<td class="row-actions"><button class="icon-btn" data-action="delete" title="삭제">삭제</button></td>' +
           '</tr>';
       }).join('');
@@ -189,6 +276,8 @@
         });
       });
     }
+
+    document.getElementById('filterWho').addEventListener('change', renderFiltered);
 
     function renderAdminCalendar() {
       var y = calMonth.getFullYear();
@@ -248,7 +337,7 @@
         statusEl.classList.add('is-error');
         return;
       }
-      var { error } = await sb.from('interview_slots').insert({ slot_date: selectedAdminDate, start_time: start, end_time: end });
+      var { error } = await sb.from('interview_slots').insert({ slot_date: selectedAdminDate, start_time: start, end_time: end, interviewer: currentInterviewer });
       if (error) {
         statusEl.textContent = '추가 실패: ' + error.message;
         statusEl.classList.add('is-error');
@@ -264,7 +353,13 @@
     (async function init() {
       var { data } = await sb.auth.getSession();
       if (data && data.session) {
-        showAdmin();
+        var savedWho = sessionStorage.getItem('nls_admin_who');
+        if (savedWho) {
+          currentInterviewer = savedWho;
+          showAdmin();
+        } else {
+          showWho();
+        }
       }
     })();
   </script>

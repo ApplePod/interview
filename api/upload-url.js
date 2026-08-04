@@ -1,0 +1,53 @@
+// 후보자가 이력서/포트폴리오를 Supabase Storage에 "직접" 업로드할 수 있도록
+// 서명된 업로드 URL을 발급해준다. 파일 자체는 Vercel 함수를 거치지 않고
+// 브라우저 → Supabase로 바로 전송되므로, 서버리스 함수의 요청 크기 제한(수 MB)에
+// 걸리지 않는다.
+
+const SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
+const STORAGE_BUCKET = 'resumes';
+
+function safeFilename(filename) {
+  return String(filename || 'file').replace(/[^\w.\-가-힣]/g, '_').slice(-120);
+}
+
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).json({ ok: false, error: 'method not allowed' });
+    return;
+  }
+
+  try {
+    const { slotId, kind, filename } = req.body || {};
+    if (!slotId || !kind || !filename || (kind !== 'resume' && kind !== 'portfolio')) {
+      res.status(400).json({ ok: false, error: 'slotId, kind(resume|portfolio), filename이 필요해요.' });
+      return;
+    }
+
+    const path = `${slotId}/${kind}-${Date.now()}-${safeFilename(filename)}`;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    const resp = await fetch(`${SUPABASE_URL}/storage/v1/object/upload/sign/${STORAGE_BUCKET}/${path}`, {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!resp.ok) {
+      res.status(502).json({ ok: false, error: `signed url 발급 실패: ${resp.status} ${await resp.text()}` });
+      return;
+    }
+
+    const { url } = await resp.json();
+    res.status(200).json({
+      ok: true,
+      uploadUrl: `${SUPABASE_URL}/storage/v1${url}`,
+      publicUrl: `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String((err && err.message) || err) });
+  }
+};

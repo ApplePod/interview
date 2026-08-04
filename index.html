@@ -16,24 +16,26 @@
     <div id="bookingView">
       <div class="firework-field" aria-hidden="true" id="miniFireworkField"></div>
 
-      <div class="hero-team" aria-hidden="true" id="heroTeam">
-        <div class="hero-avatar" style="--i:0" data-key="dochi"><img src="assets/team/dochi.png" alt="" /></div>
-        <div class="hero-avatar" style="--i:1" data-key="malti"><img src="assets/team/malti.png" alt="" /></div>
-        <div class="hero-avatar hero-avatar--mid" style="--i:2" data-key="soho"><img src="assets/team/soho.png" alt="" /></div>
-        <div class="hero-avatar" style="--i:3" data-key="jay"><img src="assets/team/jay.png" alt="" /></div>
-        <div class="hero-avatar" style="--i:4" data-key="noah"><img src="assets/team/noah.png" alt="" /></div>
+      <div class="hero-team" id="heroTeam" role="group" aria-label="면접관 선택">
+        <div class="hero-avatar" style="--i:0" data-key="dochi" role="button" tabindex="0"><img src="assets/team/dochi.png" alt="도치" /><span class="hero-avatar-name">도치</span></div>
+        <div class="hero-avatar" style="--i:1" data-key="malti" role="button" tabindex="0"><img src="assets/team/malti.png" alt="말티" /><span class="hero-avatar-name">말티</span></div>
+        <div class="hero-avatar hero-avatar--mid" style="--i:2" data-key="soho" role="button" tabindex="0"><img src="assets/team/soho.png" alt="소호" /><span class="hero-avatar-name">소호</span></div>
+        <div class="hero-avatar" style="--i:3" data-key="jay" role="button" tabindex="0"><img src="assets/team/jay.png" alt="제이" /><span class="hero-avatar-name">제이</span></div>
+        <div class="hero-avatar" style="--i:4" data-key="noah" role="button" tabindex="0"><img src="assets/team/noah.png" alt="노아" /><span class="hero-avatar-name">노아</span></div>
       </div>
-      <p class="hero-caption" id="heroCaption">잠시만요, 일정을 불러오고 있어요…</p>
+      <p class="hero-caption" id="heroCaption">누구와 면접하고 싶으세요? 위에서 한 분을 골라주세요 👋</p>
 
-      <h1 class="page-title">면접 일정을 선택해주세요</h1>
-      <p class="page-desc">달력에서 초록 점이 있는 날짜를 고르면, 그 날 예약 가능한 시간이 나와요.</p>
+      <h1 class="page-title" id="pageTitle">먼저 면접관을 선택해주세요</h1>
+      <p class="page-desc" id="pageDesc">팀원을 고르면 그 분의 예약 가능한 일정이 나와요.</p>
 
-      <div class="steps" id="steps">
-        <div class="step" id="step1"><div class="step-dot">1</div><div class="step-label">날짜</div></div>
+      <div class="steps" id="steps" style="display:none;">
+        <div class="step" id="step0"><div class="step-dot">1</div><div class="step-label">담당자</div></div>
         <div class="step-line"></div>
-        <div class="step" id="step2"><div class="step-dot">2</div><div class="step-label">시간</div></div>
+        <div class="step" id="step1"><div class="step-dot">2</div><div class="step-label">날짜</div></div>
         <div class="step-line"></div>
-        <div class="step" id="step3"><div class="step-dot">3</div><div class="step-label">정보</div></div>
+        <div class="step" id="step2"><div class="step-dot">3</div><div class="step-label">시간</div></div>
+        <div class="step-line"></div>
+        <div class="step" id="step3"><div class="step-dot">4</div><div class="step-label">정보</div></div>
       </div>
 
       <div class="calendar" id="calendar" style="display:none;">
@@ -66,6 +68,18 @@
         <div class="field">
           <label for="c-position">지원 포지션</label>
           <input type="text" id="c-position" placeholder="예: PO, 개발자" />
+        </div>
+        <div class="field">
+          <label for="c-salary">희망연봉 *</label>
+          <input type="text" id="c-salary" placeholder="예: 4000만원, 협의 가능" required />
+        </div>
+        <div class="field">
+          <label for="c-resume">이력서 * <span class="field-hint">PDF·DOC 등, 10MB 이하</span></label>
+          <input type="file" id="c-resume" accept=".pdf,.doc,.docx,.hwp" required />
+        </div>
+        <div class="field">
+          <label for="c-portfolio">포트폴리오 <span class="field-hint">선택, 10MB 이하</span></label>
+          <input type="file" id="c-portfolio" accept=".pdf,.doc,.docx,.ppt,.pptx,.hwp" />
         </div>
         <button class="btn btn-primary" id="confirmBtn">이 시간으로 예약하기</button>
         <div class="status-msg" id="statusMsg"></div>
@@ -130,18 +144,34 @@
     var selectedDate = null;
     var typeTimer = null;
     var lastBookedSlot = null;
+    var selectedInterviewer = null;
     var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    var guideIndex = parseInt(sessionStorage.getItem('nls_guide_idx'), 10);
-    if (isNaN(guideIndex) || guideIndex < 0 || guideIndex > 4) {
-      guideIndex = Math.floor(Math.random() * 5);
-      sessionStorage.setItem('nls_guide_idx', String(guideIndex));
+    function guideName() {
+      var t = TEAM.find(function (t) { return t.key === selectedInterviewer; });
+      return t ? t.name : '';
     }
-    var guideName = TEAM[guideIndex].name;
-    (function () {
-      var cell = document.querySelector('#heroTeam .hero-avatar[data-key="' + TEAM[guideIndex].key + '"]');
-      if (cell) cell.classList.add('is-guide');
-    })();
+
+    function chooseInterviewer(key) {
+      selectedInterviewer = key;
+      selectedDate = null;
+      selectedSlotId = null;
+      calMonth = null;
+      document.querySelectorAll('#heroTeam .hero-avatar').forEach(function (el) {
+        el.classList.toggle('is-guide', el.getAttribute('data-key') === key);
+      });
+      document.getElementById('pageTitle').textContent = guideName() + '님과의 면접 일정을 선택해주세요';
+      document.getElementById('pageDesc').textContent = '달력에서 초록 점이 있는 날짜를 고르면, 그 날 예약 가능한 시간이 나와요.';
+      document.getElementById('formCard').style.display = 'none';
+      loadSlots();
+    }
+
+    document.querySelectorAll('#heroTeam .hero-avatar').forEach(function (el) {
+      el.addEventListener('click', function () { chooseInterviewer(el.getAttribute('data-key')); });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chooseInterviewer(el.getAttribute('data-key')); }
+      });
+    });
 
     function typeText(text) {
       var el = document.getElementById('heroCaption');
@@ -163,7 +193,7 @@
       } else if (state === 'empty') {
         msg = '지금은 예약 가능한 시간이 없어요. 조금만 기다려주세요 🙏';
       } else if (!selectedDate) {
-        msg = guideName + '예요! 편한 날짜부터 골라주세요 👋';
+        msg = guideName() + '예요! 편한 날짜부터 골라주세요 👋';
       } else if (!selectedSlotId) {
         msg = '좋아요! 이제 편한 시간을 골라주세요 ⏰';
       } else {
@@ -182,10 +212,12 @@
     }
 
     function updateSteps() {
+      var s0 = document.getElementById('step0');
       var s1 = document.getElementById('step1');
       var s2 = document.getElementById('step2');
       var s3 = document.getElementById('step3');
-      [s1, s2, s3].forEach(function (s) { s.classList.remove('is-active', 'is-done'); });
+      [s0, s1, s2, s3].forEach(function (s) { s.classList.remove('is-active', 'is-done'); });
+      s0.classList.add('is-done');
       if (!selectedDate) {
         s1.classList.add('is-active');
       } else if (!selectedSlotId) {
@@ -199,10 +231,12 @@
     }
 
     async function loadSlots() {
+      if (!selectedInterviewer) return;
       var { data, error } = await sb
         .from('interview_slots')
         .select('*')
         .eq('is_booked', false)
+        .eq('interviewer', selectedInterviewer)
         .order('slot_date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -406,6 +440,34 @@
       }, 1800);
     }
 
+    var MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+    async function uploadFile(slotId, kind, file) {
+      var signResp = await fetch('/api/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotId: slotId, kind: kind, filename: file.name })
+      });
+      var signResult = await signResp.json();
+      if (!signResp.ok || !signResult.ok) {
+        throw new Error((signResult && signResult.error) || '업로드 URL 발급 실패');
+      }
+
+      var putResp = await fetch(signResult.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+          'Content-Type': file.type || 'application/octet-stream'
+        },
+        body: file
+      });
+      if (!putResp.ok) {
+        throw new Error('파일 업로드 실패');
+      }
+      return signResult.publicUrl;
+    }
+
     document.getElementById('confirmBtn').addEventListener('click', async function () {
       var statusEl = document.getElementById('statusMsg');
       statusEl.textContent = '';
@@ -420,52 +482,77 @@
       var email = document.getElementById('c-email').value.trim();
       var phone = document.getElementById('c-phone').value.trim();
       var position = document.getElementById('c-position').value.trim();
+      var salary = document.getElementById('c-salary').value.trim();
+      var resumeFile = document.getElementById('c-resume').files[0];
+      var portfolioFile = document.getElementById('c-portfolio').files[0];
 
       if (!name || !email) {
         statusEl.textContent = '이름과 이메일은 필수예요.';
         statusEl.classList.add('is-error');
         return;
       }
+      if (!salary) {
+        statusEl.textContent = '희망연봉을 입력해주세요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+      if (!resumeFile) {
+        statusEl.textContent = '이력서 파일을 첨부해주세요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+      if (resumeFile.size > MAX_FILE_BYTES || (portfolioFile && portfolioFile.size > MAX_FILE_BYTES)) {
+        statusEl.textContent = '파일은 10MB 이하로 올려주세요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
 
       var btn = document.getElementById('confirmBtn');
       btn.disabled = true;
-      btn.textContent = '예약 중…';
+      btn.textContent = '업로드 중…';
 
-      var { data, error } = await sb
-        .from('interview_slots')
-        .update({
-          is_booked: true,
-          candidate_name: name,
-          candidate_email: email,
-          candidate_phone: phone || null,
-          position: position || null,
-          booked_at: new Date().toISOString()
-        })
-        .eq('id', selectedSlotId)
-        .eq('is_booked', false)
-        .select();
+      var resp, result;
+      try {
+        var resumeUrl = await uploadFile(selectedSlotId, 'resume', resumeFile);
+        var portfolioUrl = portfolioFile ? await uploadFile(selectedSlotId, 'portfolio', portfolioFile) : null;
+
+        btn.textContent = '예약 중…';
+
+        resp = await fetch('/api/book-slot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slotId: selectedSlotId, name: name, email: email, phone: phone, position: position,
+            salary: salary, resumeUrl: resumeUrl, portfolioUrl: portfolioUrl
+          })
+        });
+        result = await resp.json();
+      } catch (e) {
+        resp = null;
+        result = null;
+      }
 
       btn.disabled = false;
       btn.textContent = '이 시간으로 예약하기';
 
-      if (error) {
+      if (!resp || !result || !result.ok) {
+        if (result && result.error === 'already_booked') {
+          statusEl.textContent = '아쉽게도 방금 다른 분이 먼저 예약했어요. 다른 시간을 선택해주세요.';
+          statusEl.classList.add('is-error');
+          selectedSlotId = null;
+          document.getElementById('formCard').style.display = 'none';
+          loadSlots();
+          return;
+        }
         statusEl.textContent = '오류가 발생했어요. 다시 시도해주세요.';
         statusEl.classList.add('is-error');
-        return;
-      }
-      if (!data || data.length === 0) {
-        statusEl.textContent = '아쉽게도 방금 다른 분이 먼저 예약했어요. 다른 시간을 선택해주세요.';
-        statusEl.classList.add('is-error');
-        selectedSlotId = null;
-        document.getElementById('formCard').style.display = 'none';
-        loadSlots();
         return;
       }
 
       var slot = slotsById[selectedSlotId];
       lastBookedSlot = slot;
       document.getElementById('successDesc').textContent =
-        fmtDate(slot.slot_date) + ' ' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '에 뵙겠습니다. 입력하신 이메일로 별도 안내드릴게요.';
+        guideName() + '(이)가 ' + fmtDate(slot.slot_date) + ' ' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '에 뵙겠습니다. 입력하신 이메일로 별도 안내드릴게요.';
       document.getElementById('bookingView').style.display = 'none';
       document.getElementById('successView').style.display = 'block';
       fireCelebration();
@@ -484,8 +571,8 @@
         'DTSTAMP:' + d + 'T' + startT,
         'DTSTART:' + d + 'T' + startT,
         'DTEND:' + d + 'T' + endT,
-        'SUMMARY:뉴런소프트 면접',
-        'DESCRIPTION:뉴런소프트와의 면접 일정입니다.',
+        'SUMMARY:뉴런소프트 면접 (' + guideName() + ')',
+        'DESCRIPTION:뉴런소프트 ' + guideName() + '님과의 면접 일정입니다.',
         'END:VEVENT',
         'END:VCALENDAR'
       ];
@@ -505,8 +592,6 @@
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     });
-
-    loadSlots();
   </script>
 
 </body>
