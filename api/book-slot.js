@@ -199,23 +199,22 @@ async function sendBookingNotificationEmail(slot, candidate, analysis, jiraIssue
   const dateTimeLine = fmtDateTimeRange(slot);
   const jiraLink = jiraIssueKey ? `${JIRA_BASE}/browse/${jiraIssueKey}` : null;
 
-  const links = [
-    candidate.resumeUrl ? `<a href="${candidate.resumeUrl}">이력서 보기</a>` : null,
-    candidate.portfolioUrl ? `<a href="${candidate.portfolioUrl}">포트폴리오 보기</a>` : null,
-    jiraLink ? `<a href="${jiraLink}">Jira 이슈 (${jiraIssueKey})</a>` : null,
-  ].filter(Boolean).join(' · ');
-
   const html = `
     <div style="font-family: -apple-system, sans-serif; line-height: 1.6; color: #222;">
       <h2>새 면접 예약: ${escapeHtml(candidate.name)}</h2>
       <p>
         <strong>일시:</strong> ${escapeHtml(dateTimeLine)}<br/>
-        <strong>담당자:</strong> ${escapeHtml(interviewerName)}<br/>
-        <strong>포지션:</strong> ${escapeHtml(candidate.position || '미정')}<br/>
-        <strong>희망연봉:</strong> ${escapeHtml(candidate.salary || '-')}<br/>
-        <strong>연락처:</strong> ${escapeHtml(candidate.phone || candidate.email || '-')}
+        <strong>담당자:</strong> ${escapeHtml(interviewerName)}
       </p>
-      <p>${links}</p>
+      <p>
+        <strong>이름:</strong> ${escapeHtml(candidate.name)}<br/>
+        <strong>이메일:</strong> ${escapeHtml(candidate.email || '-')}<br/>
+        <strong>연락처:</strong> ${escapeHtml(candidate.phone || '-')}<br/>
+        <strong>지원 포지션:</strong> ${escapeHtml(candidate.position || '미정')}<br/>
+        <strong>희망연봉:</strong> ${escapeHtml(candidate.salary || '-')}<br/>
+        <strong>이력서:</strong> ${candidate.resumeUrl ? `<a href="${candidate.resumeUrl}">보기</a>` : '-'}<br/>
+        <strong>포트폴리오:</strong> ${candidate.portfolioUrl ? `<a href="${candidate.portfolioUrl}">보기</a>` : '-'}${jiraLink ? `<br/><strong>Jira:</strong> <a href="${jiraLink}">${jiraIssueKey}</a>` : ''}
+      </p>
       ${analysis
         ? `<h3>AI 이력서/포트폴리오 분석</h3>
            <div style="white-space: pre-wrap; background:#f6f6f6; padding:16px; border-radius:8px;">${escapeHtml(analysis)}</div>`
