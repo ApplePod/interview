@@ -144,6 +144,7 @@
     var calMonth = null;
     var selectedDate = null;
     var typeTimer = null;
+    var lastTypedText = null;
     var lastBookedSlot = null;
     var selectedInterviewer = null;
     var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -185,6 +186,8 @@
 
     function typeText(text) {
       var el = document.getElementById('heroCaption');
+      if (text === lastTypedText) return; // 같은 문구면 다시 타이핑 애니메이션을 재생하지 않는다
+      lastTypedText = text;
       if (typeTimer) clearInterval(typeTimer);
       if (prefersReduced) { el.textContent = text; return; }
       el.textContent = '';
