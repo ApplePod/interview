@@ -5,8 +5,13 @@
 //
 // 예약이 성공하면 Jira OPER-30(채용) 아래에 면접 미팅 이슈도 자동 생성한다.
 // Jira 생성이 실패해도 예약 자체는 이미 완료된 것이므로 후보자에게는 실패로 보이지 않게 한다.
+//
+// Jira 생성 + Claude 분석 + 메일 발송(담당자용/후보자용) 4가지는 다 합치면 10~20초씩 걸릴 수 있어서,
+// 후보자를 그동안 기다리게 하지 않으려고 예약 확정(Supabase 업데이트)만 끝나면 바로 응답하고
+// 나머지는 waitUntil로 응답 이후 백그라운드에서 마저 처리한다.
 
 const crypto = require('crypto');
+const { waitUntil } = require('@vercel/functions');
 
 const SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
 const JIRA_BASE = 'https://newlearnsoft.atlassian.net';
@@ -387,49 +392,41 @@ module.exports = async (req, res) => {
     const slot = data[0];
     const candidate = { name, email, phone, position, salary, resumeUrl, portfolioUrl };
 
-    let jiraIssueKey = null;
-    let jiraError = null;
-    try {
-      const jiraIssue = await createJiraInterviewIssue(slot, candidate);
-      jiraIssueKey = jiraIssue.key;
-      await saveSlotMeta(slotId, { jira_issue_key: jiraIssueKey }).catch(() => {});
-    } catch (err) {
-      // 예약 자체는 이미 끝났으니 Jira 실패로 후보자 예약을 실패 처리하지 않는다.
-      jiraError = String((err && err.message) || err);
-    }
-
-    // 이력서/포트폴리오 AI 분석과 알림 메일도 같은 이유로 실패해도 예약 응답은 성공으로 내려준다.
-    let analysis = null;
-    let analysisError = null;
-    try {
-      analysis = await analyzeCandidateDocuments(candidate);
-    } catch (err) {
-      analysisError = String((err && err.message) || err);
-    }
-
-    let emailSent = false;
-    let emailError = null;
-    try {
-      await sendBookingNotificationEmail(slot, candidate, analysis, jiraIssueKey);
-      emailSent = true;
-    } catch (err) {
-      emailError = String((err && err.message) || err);
-    }
-
-    let candidateEmailSent = false;
-    let candidateEmailError = null;
-    try {
-      await sendCandidateConfirmationEmail(slot, candidate, cancelToken);
-      candidateEmailSent = true;
-    } catch (err) {
-      candidateEmailError = String((err && err.message) || err);
-    }
-
-    res.status(200).json({
-      ok: true, slot, jiraIssueKey, jiraError, analysis, analysisError,
-      emailSent, emailError, candidateEmailSent, candidateEmailError,
-    });
+    // 예약 자체는 여기서 이미 끝났다. Jira 생성·AI 분석·메일 발송(담당자/후보자)은
+    // 후보자를 더 기다리게 하지 않도록 응답을 먼저 보내고 나서 백그라운드로 처리한다.
+    res.status(200).json({ ok: true, slot });
+    waitUntil(processBookingSideEffects(slotId, slot, candidate, cancelToken));
   } catch (err) {
     res.status(500).json({ ok: false, error: String((err && err.message) || err) });
   }
 };
+
+async function processBookingSideEffects(slotId, slot, candidate, cancelToken) {
+  let jiraIssueKey = null;
+  try {
+    const jiraIssue = await createJiraInterviewIssue(slot, candidate);
+    jiraIssueKey = jiraIssue.key;
+    await saveSlotMeta(slotId, { jira_issue_key: jiraIssueKey }).catch(() => {});
+  } catch (err) {
+    console.error('jira create failed:', err);
+  }
+
+  let analysis = null;
+  try {
+    analysis = await analyzeCandidateDocuments(candidate);
+  } catch (err) {
+    console.error('resume analysis failed:', err);
+  }
+
+  try {
+    await sendBookingNotificationEmail(slot, candidate, analysis, jiraIssueKey);
+  } catch (err) {
+    console.error('admin notification email failed:', err);
+  }
+
+  try {
+    await sendCandidateConfirmationEmail(slot, candidate, cancelToken);
+  } catch (err) {
+    console.error('candidate confirmation email failed:', err);
+  }
+}

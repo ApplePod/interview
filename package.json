@@ -1,0 +1,7 @@
+{
+  "name": "newlearnsoft-interview",
+  "private": true,
+  "dependencies": {
+    "@vercel/functions": "^3.7.7"
+  }
+}
