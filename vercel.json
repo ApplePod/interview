@@ -8,6 +8,9 @@
   "functions": {
     "api/book-slot.js": {
       "maxDuration": 60
+    },
+    "api/manage-booking.js": {
+      "maxDuration": 30
     }
   }
 }

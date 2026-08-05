@@ -173,6 +173,15 @@
       });
     });
 
+    // 취소 후 "다른 시간으로 다시 예약하기" 링크로 들어오면 담당자를 미리 선택해둔다.
+    (function preselectFromQuery() {
+      var params = new URLSearchParams(window.location.search);
+      var key = params.get('interviewer');
+      if (key && TEAM.some(function (t) { return t.key === key; })) {
+        chooseInterviewer(key);
+      }
+    })();
+
     function typeText(text) {
       var el = document.getElementById('heroCaption');
       if (typeTimer) clearInterval(typeTimer);

@@ -6,8 +6,11 @@
 // 예약이 성공하면 Jira OPER-30(채용) 아래에 면접 미팅 이슈도 자동 생성한다.
 // Jira 생성이 실패해도 예약 자체는 이미 완료된 것이므로 후보자에게는 실패로 보이지 않게 한다.
 
+const crypto = require('crypto');
+
 const SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
 const JIRA_BASE = 'https://newlearnsoft.atlassian.net';
+const SITE_BASE = 'https://interview.newlearn-soft.com';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const TEAM_NAMES = { noah: '노아', dochi: '도치', malti: '말티', soho: '소호', jay: '제이' };
 
@@ -241,6 +244,55 @@ async function sendBookingNotificationEmail(slot, candidate, analysis, jiraIssue
   }
 }
 
+// 후보자 본인에게 예약 확인 + 취소/변경 링크를 보낸다.
+// 링크의 token은 book-slot에서 새로 발급한 무작위 값이라 추측으로 남의 예약을 건드릴 수 없다.
+async function sendCandidateConfirmationEmail(slot, candidate, cancelToken) {
+  const interviewerName = TEAM_NAMES[slot.interviewer] || slot.interviewer || '미정';
+  const dateTimeLine = fmtDateTimeRange(slot);
+  const manageLink = `${SITE_BASE}/manage.html?token=${encodeURIComponent(cancelToken)}`;
+
+  const html = `
+    <div style="font-family: -apple-system, sans-serif; line-height: 1.6; color: #222;">
+      <h2>면접 예약이 확정되었어요</h2>
+      <p>
+        <strong>${escapeHtml(interviewerName)}</strong>님과 <strong>${escapeHtml(dateTimeLine)}</strong>에 뵙겠습니다.
+      </p>
+      <p>일정을 취소하거나 다른 시간으로 변경하고 싶으시면 아래 링크를 이용해주세요.</p>
+      <p><a href="${manageLink}" style="display:inline-block; padding:10px 18px; background:#111; color:#fff; text-decoration:none; border-radius:6px;">예약 확인 / 취소·변경하기</a></p>
+      <p style="color:#888; font-size:13px;">이 링크는 본인만 사용할 수 있는 개인 링크이니 다른 사람과 공유하지 말아주세요.</p>
+    </div>
+  `;
+
+  const resp = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL || 'NewLearnSoft 채용 <onboarding@resend.dev>',
+      to: [candidate.email],
+      subject: `[뉴런소프트] 면접 예약 확인 (${dateTimeLine})`,
+      html,
+    }),
+  });
+
+  if (!resp.ok) {
+    throw new Error(`resend send (candidate) failed: ${resp.status} ${await resp.text()}`);
+  }
+}
+
+// Jira 이슈 키는 예약 확정 이후에야 알 수 있어서, 만들어진 뒤 슬롯 행에 별도로 채워 넣는다.
+// 나중에 후보자가 취소할 때 이 이슈에 "취소됨" 코멘트를 남기기 위해 필요하다.
+async function saveSlotMeta(slotId, fields) {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  await fetch(`${SUPABASE_URL}/rest/v1/interview_slots?id=eq.${encodeURIComponent(slotId)}`, {
+    method: 'PATCH',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'method not allowed' });
@@ -263,6 +315,7 @@ module.exports = async (req, res) => {
       return;
     }
 
+    const cancelToken = crypto.randomBytes(24).toString('hex');
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const resp = await fetch(
       `${SUPABASE_URL}/rest/v1/interview_slots?id=eq.${encodeURIComponent(slotId)}&is_booked=eq.false`,
@@ -284,6 +337,7 @@ module.exports = async (req, res) => {
           resume_url: resumeUrl,
           portfolio_url: portfolioUrl || null,
           booked_at: new Date().toISOString(),
+          cancel_token: cancelToken,
         }),
       }
     );
@@ -311,6 +365,7 @@ module.exports = async (req, res) => {
     try {
       const jiraIssue = await createJiraInterviewIssue(slot, candidate);
       jiraIssueKey = jiraIssue.key;
+      await saveSlotMeta(slotId, { jira_issue_key: jiraIssueKey }).catch(() => {});
     } catch (err) {
       // 예약 자체는 이미 끝났으니 Jira 실패로 후보자 예약을 실패 처리하지 않는다.
       jiraError = String((err && err.message) || err);
@@ -334,7 +389,19 @@ module.exports = async (req, res) => {
       emailError = String((err && err.message) || err);
     }
 
-    res.status(200).json({ ok: true, slot, jiraIssueKey, jiraError, analysis, analysisError, emailSent, emailError });
+    let candidateEmailSent = false;
+    let candidateEmailError = null;
+    try {
+      await sendCandidateConfirmationEmail(slot, candidate, cancelToken);
+      candidateEmailSent = true;
+    } catch (err) {
+      candidateEmailError = String((err && err.message) || err);
+    }
+
+    res.status(200).json({
+      ok: true, slot, jiraIssueKey, jiraError, analysis, analysisError,
+      emailSent, emailError, candidateEmailSent, candidateEmailError,
+    });
   } catch (err) {
     res.status(500).json({ ok: false, error: String((err && err.message) || err) });
   }

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>내 면접 예약 관리 | 뉴런소프트</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="wrap">
+    <div class="brand"><span class="brand-mark">N</span>뉴런소프트</div>
+
+    <div id="loadingView">
+      <p class="page-desc">예약 정보를 불러오는 중…</p>
+    </div>
+
+    <div id="notFoundView" style="display:none;">
+      <h1 class="page-title">링크를 찾을 수 없어요</h1>
+      <p class="page-desc">유효하지 않거나 이미 취소된 링크예요. 예약 확인 메일에 있는 링크를 다시 확인해주세요.</p>
+    </div>
+
+    <div id="bookingInfoView" style="display:none;">
+      <h1 class="page-title">내 면접 예약</h1>
+      <div class="card">
+        <p>
+          <strong id="infoInterviewer"></strong>님과<br/>
+          <strong id="infoDateTime"></strong>
+        </p>
+        <button class="btn btn-primary" id="cancelBtn" type="button">예약 취소하기</button>
+        <div class="status-msg" id="cancelStatus"></div>
+      </div>
+    </div>
+
+    <div id="cancelledView" style="display:none;">
+      <h1 class="page-title">예약이 취소되었어요</h1>
+      <p class="page-desc">해당 시간은 다시 예약 가능한 시간으로 열렸어요.</p>
+      <a class="btn btn-primary" id="rebookLink" href="/">다른 시간으로 다시 예약하기</a>
+    </div>
+  </div>
+
+  <script>
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    var WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+    function fmtDateTime(slot) {
+      var dt = new Date(slot.slot_date + 'T00:00:00');
+      var w = WEEKDAYS[dt.getDay()];
+      return (dt.getMonth() + 1) + '월 ' + dt.getDate() + '일 (' + w + ') ' + slot.start_time.slice(0, 5) + ' – ' + slot.end_time.slice(0, 5);
+    }
+
+    function show(id) {
+      ['loadingView', 'notFoundView', 'bookingInfoView', 'cancelledView'].forEach(function (v) {
+        document.getElementById(v).style.display = v === id ? 'block' : 'none';
+      });
+    }
+
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('token');
+    var currentInterviewer = null;
+
+    async function load() {
+      if (!token) { show('notFoundView'); return; }
+      var resp = await fetch('/api/manage-booking?token=' + encodeURIComponent(token));
+      var result = await resp.json().catch(function () { return null; });
+      if (!resp.ok || !result || !result.ok) { show('notFoundView'); return; }
+
+      currentInterviewer = result.slot.interviewer;
+      document.getElementById('infoInterviewer').textContent = result.slot.interviewerName;
+      document.getElementById('infoDateTime').textContent = fmtDateTime(result.slot);
+      show('bookingInfoView');
+    }
+
+    document.getElementById('cancelBtn').addEventListener('click', async function () {
+      if (!confirm('정말 이 면접 예약을 취소할까요?')) return;
+      var statusEl = document.getElementById('cancelStatus');
+      var btn = document.getElementById('cancelBtn');
+      btn.disabled = true;
+      statusEl.textContent = '';
+      statusEl.className = 'status-msg';
+
+      try {
+        var resp = await fetch('/api/manage-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token, action: 'cancel' }),
+        });
+        var result = await resp.json();
+        if (!resp.ok || !result.ok) throw new Error((result && result.error) || '취소 처리에 실패했어요.');
+
+        document.getElementById('rebookLink').href = '/?interviewer=' + encodeURIComponent(result.interviewer || currentInterviewer || '');
+        show('cancelledView');
+      } catch (e) {
+        statusEl.textContent = '취소에 실패했어요. 잠시 후 다시 시도해주세요.';
+        statusEl.classList.add('is-error');
+        btn.disabled = false;
+      }
+    });
+
+    load();
+  </script>
+
+</body>
+</html>
