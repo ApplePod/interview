@@ -562,7 +562,7 @@
       var slot = slotsById[selectedSlotId];
       lastBookedSlot = slot;
       document.getElementById('successDesc').textContent =
-        guideName() + '(이)가 ' + fmtDate(slot.slot_date) + ' ' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '에 뵙겠습니다. 입력하신 이메일로 별도 안내드릴게요.';
+        guideName() + '와의 면접이 ' + fmtDate(slot.slot_date) + ' ' + fmtTime(slot.start_time) + ' – ' + fmtTime(slot.end_time) + '으로 예약되었습니다. 입력하신 이메일로 별도 안내드릴게요.';
       document.getElementById('bookingView').style.display = 'none';
       document.getElementById('successView').style.display = 'block';
       fireCelebration();
