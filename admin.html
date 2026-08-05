@@ -100,7 +100,7 @@
       <div class="status-msg" id="deleteStatus"></div>
       <table class="slot-table">
         <thead>
-          <tr><th>날짜</th><th>시간</th><th>담당자</th><th>상태</th><th>지원자</th><th>연락처</th><th>포지션</th><th>희망연봉</th><th>이력서</th><th>포트폴리오</th><th></th></tr>
+          <tr><th>날짜</th><th>시간</th><th>담당자</th><th>상태</th><th>지원자</th><th>연락처</th><th>포지션</th><th>이력서</th><th>포트폴리오</th><th></th></tr>
         </thead>
         <tbody id="slotTableBody"></tbody>
       </table>
@@ -209,7 +209,7 @@
 
     async function loadAllSlots() {
       var tbody = document.getElementById('slotTableBody');
-      tbody.innerHTML = '<tr><td colspan="11">불러오는 중…</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10">불러오는 중…</td></tr>';
       var { data, error } = await sb
         .from('interview_slots')
         .select('*')
@@ -217,7 +217,7 @@
         .order('start_time', { ascending: true });
 
       if (error) {
-        tbody.innerHTML = '<tr><td colspan="11">불러오기 실패</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10">불러오기 실패</td></tr>';
         return;
       }
       allSlots = data || [];
@@ -242,7 +242,7 @@
 
       var tbody = document.getElementById('slotTableBody');
       if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11">등록된 슬롯이 없어요.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10">등록된 슬롯이 없어요.</td></tr>';
         return;
       }
 
@@ -260,7 +260,6 @@
           '<td>' + esc(slot.candidate_name || '-') + '</td>' +
           '<td>' + esc(slot.candidate_email || slot.candidate_phone || '-') + '</td>' +
           '<td>' + esc(slot.position || '-') + '</td>' +
-          '<td>' + esc(slot.desired_salary || '-') + '</td>' +
           '<td>' + resumeLink + '</td>' +
           '<td>' + portfolioLink + '</td>' +
           '<td class="row-actions"><button class="icon-btn" data-action="delete" title="삭제">삭제</button></td>' +

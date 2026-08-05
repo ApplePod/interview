@@ -62,7 +62,6 @@ async function createJiraInterviewIssue(slot, candidate) {
           { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: `이름: ${candidate.name}` }] }] },
           { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: `담당자: ${interviewerName}` }] }] },
           { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: `포지션: ${candidate.position || '미정'}` }] }] },
-          { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: `희망연봉: ${candidate.salary || '-'}` }] }] },
           { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: `연락처: ${candidate.phone || candidate.email || '-'}` }] }] },
           {
             type: 'listItem',
@@ -123,7 +122,7 @@ async function createJiraInterviewIssue(slot, candidate) {
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const RESEND_API_URL = 'https://api.resend.com/emails';
-const NOTIFY_EMAIL = 'newlearnsoft@gmail.com';
+const NOTIFY_EMAIL = 'koreasomoon@naver.com';
 
 function storagePathFromPublicUrl(url) {
   const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;

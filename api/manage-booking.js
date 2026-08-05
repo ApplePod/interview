@@ -5,7 +5,7 @@
 const SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
 const JIRA_BASE = 'https://newlearnsoft.atlassian.net';
 const RESEND_API_URL = 'https://api.resend.com/emails';
-const NOTIFY_EMAIL = 'newlearnsoft@gmail.com';
+const NOTIFY_EMAIL = 'koreasomoon@naver.com';
 const STORAGE_BUCKET = 'resumes';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const TEAM_NAMES = { noah: '노아', dochi: '도치', malti: '말티', soho: '소호', jay: '제이' };
