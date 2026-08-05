@@ -101,6 +101,26 @@ async function createJiraInterviewIssue(slot, candidate) {
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const NOTIFY_EMAIL = 'newlearnsoft@gmail.com';
+const STORAGE_BUCKET = 'resumes';
+
+function storagePathFromPublicUrl(url) {
+  const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
+  const idx = (url || '').indexOf(marker);
+  return idx === -1 ? null : url.slice(idx + marker.length);
+}
+
+// 파일은 이미 업로드됐는데 그 사이 다른 사람이 슬롯을 먼저 예약해버려서
+// 예약 자체가 실패하는 경우, 업로드된 이력서/포트폴리오가 스토리지에 고아로 남지 않도록 정리한다.
+async function deleteUploadedFiles(urls) {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const prefixes = urls.filter(Boolean).map(storagePathFromPublicUrl).filter(Boolean);
+  if (prefixes.length === 0) return;
+  await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}`, {
+    method: 'DELETE',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefixes }),
+  });
+}
 
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({
@@ -108,17 +128,28 @@ function escapeHtml(str) {
   }[c]));
 }
 
+function isPdfUrl(url) {
+  return /\.pdf(\?|#|$)/i.test(url || '');
+}
+
 // 이력서/포트폴리오 PDF는 Supabase Storage의 공개 URL이라 다운로드해서 base64로
 // 바꿀 필요 없이 Claude API의 document(url) 소스로 바로 넘긴다.
+// Claude document 분석은 PDF만 지원하므로, 업로드 폼이 허용하는 .doc/.docx/.hwp 등은
+// 여기서 걸러내고 분석을 생략한다 (억지로 넘기면 Claude가 알 수 없는 형식 에러를 뱉는다).
 async function analyzeCandidateDocuments(candidate) {
   const documentBlocks = [];
-  if (candidate.resumeUrl) {
+  if (candidate.resumeUrl && isPdfUrl(candidate.resumeUrl)) {
     documentBlocks.push({ type: 'document', source: { type: 'url', url: candidate.resumeUrl } });
   }
-  if (candidate.portfolioUrl) {
+  if (candidate.portfolioUrl && isPdfUrl(candidate.portfolioUrl)) {
     documentBlocks.push({ type: 'document', source: { type: 'url', url: candidate.portfolioUrl } });
   }
-  if (documentBlocks.length === 0) return null;
+  if (documentBlocks.length === 0) {
+    if (candidate.resumeUrl && !isPdfUrl(candidate.resumeUrl)) {
+      throw new Error('이력서가 PDF 형식이 아니라 AI 분석을 생략했습니다 (PDF만 지원).');
+    }
+    return null;
+  }
 
   const resp = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
@@ -267,6 +298,8 @@ module.exports = async (req, res) => {
     const data = await resp.json();
     if (!data || data.length === 0) {
       // 이미 다른 사람이 먼저 예약함 (is_booked=false 조건에 안 걸림)
+      // 이미 업로드된 파일은 고아로 남지 않게 정리 (실패해도 예약 실패 응답 자체는 그대로 내려줌)
+      await deleteUploadedFiles([resumeUrl, portfolioUrl]).catch(() => {});
       res.status(409).json({ ok: false, error: 'already_booked' });
       return;
     }

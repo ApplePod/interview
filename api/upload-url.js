@@ -23,8 +23,25 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const path = `${slotId}/${kind}-${Date.now()}-${safeFilename(filename)}`;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    // 존재하지 않거나 이미 예약된 슬롯 앞으로 업로드 URL을 발급해주지 않는다
+    // (임의 slotId로 스토리지에 파일을 계속 올리는 남용을 막기 위함)
+    const slotCheckResp = await fetch(
+      `${SUPABASE_URL}/rest/v1/interview_slots?id=eq.${encodeURIComponent(slotId)}&is_booked=eq.false&select=id`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+    );
+    if (!slotCheckResp.ok) {
+      res.status(502).json({ ok: false, error: `슬롯 확인 실패: ${slotCheckResp.status} ${await slotCheckResp.text()}` });
+      return;
+    }
+    const slotCheckData = await slotCheckResp.json();
+    if (!slotCheckData || slotCheckData.length === 0) {
+      res.status(404).json({ ok: false, error: '존재하지 않거나 이미 예약된 슬롯이에요.' });
+      return;
+    }
+
+    const path = `${slotId}/${kind}-${Date.now()}-${safeFilename(filename)}`;
 
     const resp = await fetch(`${SUPABASE_URL}/storage/v1/object/upload/sign/${STORAGE_BUCKET}/${path}`, {
       method: 'POST',

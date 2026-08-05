@@ -97,6 +97,7 @@
         </select>
       </div>
 
+      <div class="status-msg" id="deleteStatus"></div>
       <table class="slot-table">
         <thead>
           <tr><th>날짜</th><th>시간</th><th>담당자</th><th>상태</th><th>지원자</th><th>연락처</th><th>포지션</th><th>희망연봉</th><th>이력서</th><th>포트폴리오</th><th></th></tr>
@@ -270,8 +271,21 @@
         btn.addEventListener('click', async function () {
           var tr = btn.closest('tr');
           var id = tr.getAttribute('data-id');
-          if (!confirm('이 슬롯을 삭제할까요?')) return;
-          await sb.from('interview_slots').delete().eq('id', id);
+          var slot = filtered.find(function (s) { return String(s.id) === id; });
+          var confirmMsg = slot && slot.is_booked
+            ? '⚠️ 이 슬롯은 "' + (slot.candidate_name || '지원자') + '"님이 예약한 슬롯이에요. 정말 삭제할까요? 예약 기록이 완전히 사라집니다.'
+            : '이 슬롯을 삭제할까요?';
+          if (!confirm(confirmMsg)) return;
+          var { error } = await sb.from('interview_slots').delete().eq('id', id);
+          var deleteStatusEl = document.getElementById('deleteStatus');
+          if (error) {
+            if (deleteStatusEl) {
+              deleteStatusEl.textContent = '삭제 실패: ' + error.message;
+              deleteStatusEl.className = 'status-msg is-error';
+            }
+            return;
+          }
+          if (deleteStatusEl) { deleteStatusEl.textContent = ''; deleteStatusEl.className = 'status-msg'; }
           loadAllSlots();
         });
       });
@@ -334,6 +348,19 @@
       var end = document.getElementById('n-end').value;
       if (!selectedAdminDate || !start || !end) {
         statusEl.textContent = '날짜를 선택하고 시작/종료 시간을 입력해주세요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+      if (end <= start) {
+        statusEl.textContent = '종료 시간은 시작 시간보다 늦어야 해요.';
+        statusEl.classList.add('is-error');
+        return;
+      }
+      var isDuplicate = allSlots.some(function (s) {
+        return s.slot_date === selectedAdminDate && s.start_time.slice(0, 5) === start && s.interviewer === currentInterviewer;
+      });
+      if (isDuplicate) {
+        statusEl.textContent = '같은 날짜·시간에 이미 등록된 슬롯이 있어요.';
         statusEl.classList.add('is-error');
         return;
       }
