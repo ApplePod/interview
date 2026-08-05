@@ -11,8 +11,21 @@ const crypto = require('crypto');
 const SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
 const JIRA_BASE = 'https://newlearnsoft.atlassian.net';
 const SITE_BASE = 'https://interview.newlearn-soft.com';
+const STORAGE_BUCKET = 'resumes';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const TEAM_NAMES = { noah: '노아', dochi: '도치', malti: '말티', soho: '소호', jay: '제이' };
+const MAX_LENGTHS = { name: 100, position: 100, salary: 50, phone: 30 };
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// resumeUrl/portfolioUrl은 클라이언트가 보내는 값이라, 실제로 "이번 슬롯용으로
+// api/upload-url.js가 발급해준 경로"인지 확인 없이 그대로 믿으면 안 된다.
+// 검증 없이 신뢰하면 다른 슬롯(다른 사람)의 업로드 URL이나 완전히 외부 URL을
+// 이력서인 것처럼 제출해도 그대로 통과돼버린다.
+function isOwnedFileUrl(url, slotId) {
+  if (typeof url !== 'string') return false;
+  const prefix = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${slotId}/`;
+  return url.startsWith(prefix);
+}
 
 function fmtDateTimeRange(slot) {
   const d = new Date(slot.slot_date + 'T00:00:00');
@@ -104,7 +117,6 @@ async function createJiraInterviewIssue(slot, candidate) {
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const NOTIFY_EMAIL = 'newlearnsoft@gmail.com';
-const STORAGE_BUCKET = 'resumes';
 
 function storagePathFromPublicUrl(url) {
   const marker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
@@ -306,12 +318,27 @@ module.exports = async (req, res) => {
       res.status(400).json({ ok: false, error: '필수 정보가 누락됐어요 (slotId, name, email 필요).' });
       return;
     }
+    if (!EMAIL_RE.test(email)) {
+      res.status(400).json({ ok: false, error: '이메일 형식이 올바르지 않아요.' });
+      return;
+    }
     if (!salary) {
       res.status(400).json({ ok: false, error: '희망연봉을 입력해주세요.' });
       return;
     }
     if (!resumeUrl) {
       res.status(400).json({ ok: false, error: '이력서 파일을 첨부해주세요.' });
+      return;
+    }
+    for (const [field, max] of Object.entries(MAX_LENGTHS)) {
+      const value = { name, position, salary, phone }[field];
+      if (value && String(value).length > max) {
+        res.status(400).json({ ok: false, error: `입력값이 너무 길어요 (${field} 최대 ${max}자).` });
+        return;
+      }
+    }
+    if (!isOwnedFileUrl(resumeUrl, slotId) || (portfolioUrl && !isOwnedFileUrl(portfolioUrl, slotId))) {
+      res.status(400).json({ ok: false, error: '유효하지 않은 파일 URL이에요. 파일을 다시 첨부해주세요.' });
       return;
     }
 

@@ -17,6 +17,8 @@
 
 const JIRA_BASE = 'https://newlearnsoft.atlassian.net';
 const SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
+const STORAGE_BUCKET = 'resumes';
+const ORPHAN_GRACE_MS = 3 * 60 * 60 * 1000; // 업로드만 하고 예약을 아직 안 끝냈을 수도 있으니 3시간은 봐준다
 
 const WORK_BLOCKS = [
   ['10:00', '12:00'],
@@ -35,17 +37,77 @@ module.exports = async (req, res) => {
   try {
     const busyBlocks = await fetchJiraBusyBlocks();
     const result = await reconcile(busyBlocks);
+    const orphanResult = await cleanupOrphanedUploads().catch((err) => ({ error: String(err && err.message || err) }));
     res.status(200).json({
       ok: true,
       busyBlocks: busyBlocks.length,
       closed: result.toDelete.length,
       opened: result.toInsert.length,
       cleanedUpPast: result.cleanedUp,
+      orphanCleanup: orphanResult,
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err && err.message || err) });
   }
 };
+
+// 이력서/포트폴리오 파일은 업로드된 뒤 예약을 끝까지 안 마치면(폼 중간에 이탈 등)
+// 스토리지에 영원히 남는다. 슬롯별 폴더를 훑어서, 예약과 연결되지 않은 채
+// 일정 시간이 지난 파일은 지운다.
+async function listBucketPrefix(prefix) {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const resp = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${STORAGE_BUCKET}`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefix, limit: 1000, sortBy: { column: 'name', order: 'asc' } }),
+  });
+  if (!resp.ok) throw new Error(`storage list failed: ${resp.status} ${await resp.text()}`);
+  return resp.json();
+}
+
+async function deleteStoragePrefixes(prefixes) {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}`, {
+    method: 'DELETE',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefixes }),
+  });
+}
+
+async function cleanupOrphanedUploads() {
+  const now = Date.now();
+  const topLevel = await listBucketPrefix('');
+  // Supabase Storage list: 폴더는 id가 없고 실제 파일만 id/metadata를 가진다.
+  const slotFolders = topLevel.filter((entry) => !entry.id).map((entry) => entry.name);
+
+  let checkedFolders = 0;
+  let deletedFolders = 0;
+  let deletedFiles = 0;
+
+  for (const slotId of slotFolders) {
+    checkedFolders++;
+    const files = await listBucketPrefix(`${slotId}/`);
+    if (!files || files.length === 0) continue;
+
+    const newestMs = Math.max(...files.map((f) => new Date((f.created_at || f.updated_at || 0)).getTime()));
+    if (now - newestMs < ORPHAN_GRACE_MS) continue; // 아직 예약 진행 중일 수 있으니 유예
+
+    const rows = await sbFetch(
+      `/interview_slots?id=eq.${encodeURIComponent(slotId)}&select=id,is_booked,resume_url,portfolio_url`
+    );
+    const row = rows && rows[0];
+    const stillReferenced = row && row.is_booked && (
+      (row.resume_url || '').includes(`/${slotId}/`) || (row.portfolio_url || '').includes(`/${slotId}/`)
+    );
+    if (stillReferenced) continue;
+
+    await deleteStoragePrefixes(files.map((f) => `${slotId}/${f.name}`));
+    deletedFolders++;
+    deletedFiles += files.length;
+  }
+
+  return { checkedFolders, deletedFolders, deletedFiles };
+}
 
 function isAuthorized(req) {
   const cronSecret = process.env.CRON_SECRET;

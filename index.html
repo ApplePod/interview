@@ -55,7 +55,7 @@
       <div class="card" id="formCard" style="display:none;">
         <div class="field">
           <label for="c-name">이름 *</label>
-          <input type="text" id="c-name" required />
+          <input type="text" id="c-name" maxlength="100" required />
         </div>
         <div class="field">
           <label for="c-email">이메일 *</label>
@@ -63,15 +63,15 @@
         </div>
         <div class="field">
           <label for="c-phone">연락처</label>
-          <input type="tel" id="c-phone" />
+          <input type="tel" id="c-phone" maxlength="30" />
         </div>
         <div class="field">
           <label for="c-position">지원 포지션</label>
-          <input type="text" id="c-position" placeholder="예: PO, 개발자" />
+          <input type="text" id="c-position" placeholder="예: PO, 개발자" maxlength="100" />
         </div>
         <div class="field">
           <label for="c-salary">희망연봉 (편하게 기입) *</label>
-          <input type="text" id="c-salary" placeholder="예: 4000만원, 협의 가능" required />
+          <input type="text" id="c-salary" placeholder="예: 4000만원, 협의 가능" maxlength="50" required />
         </div>
         <div class="field">
           <label for="c-resume">이력서 최신본 * <span class="field-hint">PDF·DOC 등, 10MB 이하</span></label>
