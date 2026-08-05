@@ -47,23 +47,23 @@ async function findSlotByToken(token, { onlyBooked } = {}) {
   return data && data[0] ? data[0] : null;
 }
 
-async function addJiraCancelComment(issueKey) {
+// 취소 여부를 코멘트가 아니라 이슈 제목 자체에 취소선으로 표시한다.
+// 요약(summary) 필드는 일반 텍스트라 진짜 서식이 안 먹으니, 각 글자 뒤에
+// 취소선용 결합 문자(U+0336)를 붙여서 시각적으로 줄이 그어진 것처럼 보이게 만든다.
+function strikethrough(text) {
+  return String(text).split('').map((c) => c + '̶').join('');
+}
+
+async function strikeJiraTitle(issueKey, originalSummary) {
   const email = process.env.JIRA_EMAIL;
   const token = process.env.JIRA_API_TOKEN;
   const auth = Buffer.from(`${email}:${token}`).toString('base64');
-  const body = {
-    body: {
-      type: 'doc',
-      version: 1,
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: '⚠️ 후보자가 예약 사이트에서 이 면접을 취소했습니다.' }] }],
-    },
-  };
-  const resp = await fetch(`${JIRA_BASE}/rest/api/3/issue/${issueKey}/comment`, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(body),
+  const resp = await fetch(`${JIRA_BASE}/rest/api/3/issue/${issueKey}`, {
+    method: 'PUT',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { summary: strikethrough(originalSummary) } }),
   });
-  if (!resp.ok) throw new Error(`jira comment failed: ${resp.status} ${await resp.text()}`);
+  if (!resp.ok) throw new Error(`jira title update failed: ${resp.status} ${await resp.text()}`);
 }
 
 async function notifyCancelEmail(slot) {
@@ -72,7 +72,7 @@ async function notifyCancelEmail(slot) {
     <div style="font-family: -apple-system, sans-serif; line-height: 1.6; color: #222;">
       <h2>면접 예약 취소: ${slot.candidate_name || '지원자'}</h2>
       <p><strong>${interviewerName}</strong>님과 <strong>${fmtDateTimeRange(slot)}</strong>에 예정됐던 면접이
-      후보자에 의해 취소됐어요.${slot.jira_issue_key ? ` (Jira <a href="${JIRA_BASE}/browse/${slot.jira_issue_key}">${slot.jira_issue_key}</a>에 코멘트 남김)` : ''}</p>
+      후보자에 의해 취소됐어요.${slot.jira_issue_key ? ` (Jira <a href="${JIRA_BASE}/browse/${slot.jira_issue_key}">${slot.jira_issue_key}</a> 제목에 취소선 표시함)` : ''}</p>
     </div>
   `;
   const resp = await fetch(RESEND_API_URL, {
@@ -151,7 +151,9 @@ module.exports = async (req, res) => {
     }
 
     await deleteUploadedFiles([slot.resume_url, slot.portfolio_url]).catch(() => {});
-    if (slot.jira_issue_key) await addJiraCancelComment(slot.jira_issue_key).catch(() => {});
+    if (slot.jira_issue_key) {
+      await strikeJiraTitle(slot.jira_issue_key, `${slot.candidate_name} 면접`).catch(() => {});
+    }
     await notifyCancelEmail(slot).catch(() => {});
 
     res.status(200).json({ ok: true, interviewer: slot.interviewer });
