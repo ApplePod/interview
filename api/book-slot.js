@@ -271,20 +271,65 @@ async function sendCandidateConfirmationEmail(slot, candidate, cancelToken) {
   const dateTimeLine = fmtDateTimeRange(slot);
   const manageLink = `${SITE_BASE}/manage.html?token=${encodeURIComponent(cancelToken)}`;
 
+  const infoRows = [
+    ['🗓️', '일시', `${escapeHtml(interviewerName)}님과 ${escapeHtml(dateTimeLine)}`],
+    ['📍', '장소', escapeHtml(INTERVIEW_LOCATION)],
+    interviewerPhone ? ['☎️', '도착 연락처', `${escapeHtml(interviewerPhone)} (${escapeHtml(interviewerName)})`] : null,
+  ].filter(Boolean).map(([icon, label, value]) => `
+    <tr>
+      <td style="padding:14px 0; border-bottom:1px solid #eee;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td width="28" style="font-size:18px; vertical-align:top;">${icon}</td>
+            <td style="vertical-align:top;">
+              <div style="font-size:12px; color:#999; margin-bottom:2px;">${label}</div>
+              <div style="font-size:15px; color:#1a1a1a; font-weight:600;">${value}</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  `).join('');
+
   const html = `
-    <div style="font-family: -apple-system, sans-serif; line-height: 1.6; color: #222;">
-      <h2>면접 예약이 확정되었어요</h2>
-      <p>
-        <strong>${escapeHtml(interviewerName)}</strong>님과 <strong>${escapeHtml(dateTimeLine)}</strong>에 뵙겠습니다.
-      </p>
-      <p>
-        📍 <strong>면접 장소:</strong> ${escapeHtml(INTERVIEW_LOCATION)}<br/>
-        ${interviewerPhone ? `☎️ <strong>도착하시면 연락주세요:</strong> ${escapeHtml(interviewerPhone)} (${escapeHtml(interviewerName)})` : ''}
-      </p>
-      <p>일정을 취소하거나 다른 시간으로 변경하고 싶으시면 아래 링크를 이용해주세요.</p>
-      <p><a href="${manageLink}" style="display:inline-block; padding:10px 18px; background:#111; color:#fff; text-decoration:none; border-radius:6px;">예약 확인 / 취소·변경하기</a></p>
-      <p style="color:#888; font-size:13px;">이 링크는 본인만 사용할 수 있는 개인 링크이니 다른 사람과 공유하지 말아주세요.</p>
-    </div>
+  <div style="background:#f4f4f5; padding:40px 16px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="100%" style="max-width:520px; margin:0 auto;">
+      <tr>
+        <td style="background:#ffffff; border-radius:16px; padding:40px 36px; box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="width:26px; height:26px; background:#111; border-radius:7px; text-align:center; vertical-align:middle;">
+                <span style="color:#fff; font-weight:900; font-size:13px; line-height:26px;">N</span>
+              </td>
+              <td style="padding-left:10px; font-weight:800; font-size:14px; color:#111;">뉴런소프트</td>
+            </tr>
+          </table>
+
+          <div style="font-size:38px; margin-top:28px;">✅</div>
+          <h1 style="font-size:22px; font-weight:800; color:#111; margin:12px 0 6px; letter-spacing:-0.02em;">면접이 확정됐어요</h1>
+          <p style="font-size:14px; color:#666; margin:0 0 24px;">아래 내용 확인하시고, 시간 맞춰 뵈어요!</p>
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fafafa; border-radius:12px; padding:4px 20px;">
+            ${infoRows}
+          </table>
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:28px;">
+            <tr>
+              <td align="center">
+                <a href="${manageLink}" style="display:inline-block; width:100%; box-sizing:border-box; padding:14px 20px; background:#111; color:#ffffff; text-decoration:none; border-radius:10px; font-size:14px; font-weight:700; text-align:center;">예약 확인 · 취소 / 변경하기</a>
+              </td>
+            </tr>
+          </table>
+
+          <p style="font-size:12px; color:#aaa; margin-top:20px; line-height:1.6;">
+            이 링크는 본인만 사용할 수 있는 개인 링크예요. 다른 사람과 공유하지 말아주세요.<br/>
+            이 메일은 발신전용입니다. 문의사항은 채용 담당자에게 회신 부탁드려요.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </div>
   `;
 
   const resp = await fetch(RESEND_API_URL, {
