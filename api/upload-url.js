@@ -5,6 +5,7 @@
 
 const SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
 const STORAGE_BUCKET = 'resumes';
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 function safeFilename(filename) {
   return String(filename || 'file').replace(/[^\w.\-가-힣]/g, '_').slice(-120);
@@ -17,9 +18,16 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { slotId, kind, filename } = req.body || {};
+    const { slotId, kind, filename, size } = req.body || {};
     if (!slotId || !kind || !filename || (kind !== 'resume' && kind !== 'portfolio')) {
       res.status(400).json({ ok: false, error: 'slotId, kind(resume|portfolio), filename이 필요해요.' });
+      return;
+    }
+    // 클라이언트가 보낸 값이라 완전한 방어선은 아니지만(속여서 보낼 수 있음), 정상적인
+    // 클라이언트가 실수로 크기 제한을 우회하는 경우는 여기서 바로 걸러진다.
+    // 진짜 방어선은 Supabase Storage 버킷 자체의 파일 크기 제한이다.
+    if (typeof size === 'number' && size > MAX_FILE_BYTES) {
+      res.status(413).json({ ok: false, error: '파일은 10MB 이하로 올려주세요.' });
       return;
     }
 

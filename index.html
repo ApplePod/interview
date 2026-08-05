@@ -455,7 +455,7 @@
       var signResp = await fetch('/api/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slotId: slotId, kind: kind, filename: file.name })
+        body: JSON.stringify({ slotId: slotId, kind: kind, filename: file.name, size: file.size })
       });
       var signResult = await signResp.json();
       if (!signResp.ok || !signResult.ok) {
