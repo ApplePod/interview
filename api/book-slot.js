@@ -19,6 +19,8 @@ const SITE_BASE = 'https://interview.newlearn-soft.com';
 const STORAGE_BUCKET = 'resumes';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const TEAM_NAMES = { noah: '노아', dochi: '도치', malti: '말티', soho: '소호', jay: '제이' };
+const TEAM_PHONES = { noah: '01068893386' };
+const INTERVIEW_LOCATION = '서울 관악구 봉천로 545 창업센터 관악';
 const MAX_LENGTHS = { name: 100, position: 100, salary: 50, phone: 30 };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -265,6 +267,7 @@ async function sendBookingNotificationEmail(slot, candidate, analysis, jiraIssue
 // 링크의 token은 book-slot에서 새로 발급한 무작위 값이라 추측으로 남의 예약을 건드릴 수 없다.
 async function sendCandidateConfirmationEmail(slot, candidate, cancelToken) {
   const interviewerName = TEAM_NAMES[slot.interviewer] || slot.interviewer || '미정';
+  const interviewerPhone = TEAM_PHONES[slot.interviewer] || null;
   const dateTimeLine = fmtDateTimeRange(slot);
   const manageLink = `${SITE_BASE}/manage.html?token=${encodeURIComponent(cancelToken)}`;
 
@@ -273,6 +276,10 @@ async function sendCandidateConfirmationEmail(slot, candidate, cancelToken) {
       <h2>면접 예약이 확정되었어요</h2>
       <p>
         <strong>${escapeHtml(interviewerName)}</strong>님과 <strong>${escapeHtml(dateTimeLine)}</strong>에 뵙겠습니다.
+      </p>
+      <p>
+        📍 <strong>면접 장소:</strong> ${escapeHtml(INTERVIEW_LOCATION)}<br/>
+        ${interviewerPhone ? `☎️ <strong>도착하시면 연락주세요:</strong> ${escapeHtml(interviewerPhone)} (${escapeHtml(interviewerName)})` : ''}
       </p>
       <p>일정을 취소하거나 다른 시간으로 변경하고 싶으시면 아래 링크를 이용해주세요.</p>
       <p><a href="${manageLink}" style="display:inline-block; padding:10px 18px; background:#111; color:#fff; text-decoration:none; border-radius:6px;">예약 확인 / 취소·변경하기</a></p>
