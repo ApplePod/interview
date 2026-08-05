@@ -47,23 +47,19 @@ async function findSlotByToken(token, { onlyBooked } = {}) {
   return data && data[0] ? data[0] : null;
 }
 
-// 취소 여부를 코멘트가 아니라 이슈 제목 자체에 취소선으로 표시한다.
-// 요약(summary) 필드는 일반 텍스트라 진짜 서식이 안 먹으니, 각 글자 뒤에
-// 취소선용 결합 문자(U+0336)를 붙여서 시각적으로 줄이 그어진 것처럼 보이게 만든다.
-function strikethrough(text) {
-  return String(text).split('').map((c) => c + '̶').join('');
-}
-
-async function strikeJiraTitle(issueKey, originalSummary) {
+// 취소되면 해당 면접 이슈는 더 이상 필요 없으니 Jira에서 아예 지운다.
+// 이미 지워진 상태(404)는 에러로 취급하지 않는다 — 중복 취소 요청 등으로 재시도돼도 안전하게.
+async function deleteJiraIssue(issueKey) {
   const email = process.env.JIRA_EMAIL;
   const token = process.env.JIRA_API_TOKEN;
   const auth = Buffer.from(`${email}:${token}`).toString('base64');
   const resp = await fetch(`${JIRA_BASE}/rest/api/3/issue/${issueKey}`, {
-    method: 'PUT',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { summary: strikethrough(originalSummary) } }),
+    method: 'DELETE',
+    headers: { Authorization: `Basic ${auth}` },
   });
-  if (!resp.ok) throw new Error(`jira title update failed: ${resp.status} ${await resp.text()}`);
+  if (!resp.ok && resp.status !== 404) {
+    throw new Error(`jira delete failed: ${resp.status} ${await resp.text()}`);
+  }
 }
 
 async function notifyCancelEmail(slot) {
@@ -72,7 +68,7 @@ async function notifyCancelEmail(slot) {
     <div style="font-family: -apple-system, sans-serif; line-height: 1.6; color: #222;">
       <h2>면접 예약 취소: ${slot.candidate_name || '지원자'}</h2>
       <p><strong>${interviewerName}</strong>님과 <strong>${fmtDateTimeRange(slot)}</strong>에 예정됐던 면접이
-      후보자에 의해 취소됐어요.${slot.jira_issue_key ? ` (Jira <a href="${JIRA_BASE}/browse/${slot.jira_issue_key}">${slot.jira_issue_key}</a> 제목에 취소선 표시함)` : ''}</p>
+      후보자에 의해 취소됐어요.${slot.jira_issue_key ? ` (연결된 Jira 이슈 ${slot.jira_issue_key}도 함께 정리됨)` : ''}</p>
     </div>
   `;
   const resp = await fetch(RESEND_API_URL, {
@@ -152,7 +148,7 @@ module.exports = async (req, res) => {
 
     await deleteUploadedFiles([slot.resume_url, slot.portfolio_url]).catch(() => {});
     if (slot.jira_issue_key) {
-      await strikeJiraTitle(slot.jira_issue_key, `${slot.candidate_name} 면접`).catch(() => {});
+      await deleteJiraIssue(slot.jira_issue_key).catch(() => {});
     }
     await notifyCancelEmail(slot).catch(() => {});
 
