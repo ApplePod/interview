@@ -98,8 +98,9 @@ assets/team/*.png    팀원 아바타 이미지 (노아/도치/말티/소호/제
 api/
   book-slot.js        예약 확정 + Jira 이슈 생성 + AI 분석 + 메일 발송(담당자·후보자)
   upload-url.js        이력서/포트폴리오 업로드용 서명 URL 발급
-  sync-schedule.js      Jira ↔ 슬롯 자동 동기화 (cron + webhook)
+  sync-schedule.js      Jira ↔ 슬롯 자동 동기화 (cron + webhook, 노아 미팅·발표 이슈 한정)
   manage-booking.js     토큰으로 예약 조회/취소 처리
+  block-slot.js         면접 아닌 이유로 슬롯만 닫기 (jira-slot-block 스킬 전용, x-block-secret 인증)
 vercel.json            cron 설정, book-slot·manage-booking 함수 timeout 설정
 ```
 
@@ -120,13 +121,14 @@ Vercel 프로젝트 → **Settings → Environment Variables**에 아래 값들�
 
 | 변수명 | 어디서 쓰나요 | 무슨 역할이에요? |
 |---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | book-slot, upload-url, sync-schedule | Supabase에 서버 권한으로 접근하는 키 (아래 "왜 service_role 키를 쓰나요?" 참고) |
+| `SUPABASE_SERVICE_ROLE_KEY` | book-slot, upload-url, sync-schedule, block-slot | Supabase에 서버 권한으로 접근하는 키 (아래 "왜 service_role 키를 쓰나요?" 참고) |
 | `JIRA_EMAIL` | book-slot, sync-schedule | Jira API 호출용 계정 이메일 |
 | `JIRA_API_TOKEN` | book-slot, sync-schedule | Jira API 토큰 |
 | `ANTHROPIC_API_KEY` | book-slot | Claude API로 이력서/포트폴리오 분석하는 데 필요 |
 | `RESEND_API_KEY` | book-slot | 예약 알림 메일 발송하는 데 필요 |
 | `RESEND_FROM_EMAIL` | book-slot | 메일 발신 주소 (예: `채용팀 <no-reply@newlearn-soft.com>`). 비워두면 테스트용 주소로만 발송되니 꼭 채워두세요 |
 | `CRON_SECRET` | sync-schedule | Vercel이 하루 한 번 동기화 요청 보낼 때 쓰는 비밀값 |
+| `BLOCK_SLOT_SECRET` | block-slot | 면접 아닌 이유로 팀원 슬롯을 막을 때(`/api/block-slot`) 쓰는 비밀값. `jira-slot-block` 스킬이 이 헤더(`x-block-secret`)로 호출 |
 | `SYNC_WEBHOOK_SECRET` | sync-schedule | Jira에서 동기화 요청 보낼 때 쓰는 비밀값 |
 
 ⚠️ **환경변수를 하나라도 새로 넣거나 바꿨다면, 그 뒤에 반드시 재배포(`vercel deploy --prod`)를 해야
