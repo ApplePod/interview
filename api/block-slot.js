@@ -4,7 +4,10 @@
 // (anon key로는 이 테이블에 쓰기 자체가 막혀 있음 — README "왜 service_role 키를 쓰나요?" 참고).
 //
 // 트리거: POST, 헤더 x-block-secret (BLOCK_SLOT_SECRET 환경변수와 일치해야 함)
-// 바디: { slot_date, start_time, end_time, interviewer, jira_issue_key, label }
+// 바디: { slot_date, start_time, end_time, interviewer, jira_issue_key, label,
+//         candidate_name, candidate_email, candidate_phone, position }
+//   - label: jira-slot-block(비면접 일정)에서 씀 — candidate_name 미지정 시 이 값을 이름 칸에 넣음
+//   - candidate_name/email/phone/position: jira-interview(실제 면접 후보자)에서 씀
 
 const SUPABASE_URL = 'https://lnvaqdfhsewihveemhbm.supabase.co';
 
@@ -18,7 +21,10 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { slot_date, start_time, end_time, interviewer, jira_issue_key, label } = req.body || {};
+  const {
+    slot_date, start_time, end_time, interviewer, jira_issue_key, label,
+    candidate_name, candidate_email, candidate_phone, position,
+  } = req.body || {};
   if (!slot_date || !start_time || !end_time || !interviewer) {
     res.status(400).json({ ok: false, error: 'slot_date, start_time, end_time, interviewer는 필수' });
     return;
@@ -27,6 +33,15 @@ module.exports = async (req, res) => {
   try {
     const st = start_time.length === 5 ? `${start_time}:00` : start_time;
     const et = end_time.length === 5 ? `${end_time}:00` : end_time;
+    const bookingFields = {
+      is_booked: true,
+      candidate_name: candidate_name || label || '[내부일정]',
+      candidate_email: candidate_email || null,
+      candidate_phone: candidate_phone || null,
+      position: position || null,
+      jira_issue_key: jira_issue_key || null,
+      booked_at: new Date().toISOString(),
+    };
 
     const existing = (await sbFetch(
       `/interview_slots?slot_date=eq.${slot_date}&interviewer=eq.${interviewer}&is_booked=eq.false&start_time=gte.${st}&start_time=lt.${et}&select=id,start_time,end_time`
@@ -36,12 +51,7 @@ module.exports = async (req, res) => {
     for (const slot of existing) {
       await sbFetch(`/interview_slots?id=eq.${slot.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          is_booked: true,
-          candidate_name: label || '[내부일정]',
-          jira_issue_key: jira_issue_key || null,
-          booked_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(bookingFields),
       });
       closed.push(slot.id);
     }
@@ -50,16 +60,7 @@ module.exports = async (req, res) => {
     if (existing.length === 0) {
       const inserted = await sbFetch('/interview_slots', {
         method: 'POST',
-        body: JSON.stringify([{
-          slot_date,
-          start_time: st,
-          end_time: et,
-          interviewer,
-          is_booked: true,
-          candidate_name: label || '[내부일정]',
-          jira_issue_key: jira_issue_key || null,
-          booked_at: new Date().toISOString(),
-        }]),
+        body: JSON.stringify([{ slot_date, start_time: st, end_time: et, interviewer, ...bookingFields }]),
       });
       created = (inserted || []).map((r) => r.id);
     }
